@@ -8,7 +8,7 @@ export async function login(req: Request, res: Response) {
     const user = await authServices.login(email, password);
 
     if (!user) {
-        return res.status(401).json({ message: "Invalid email or password"});
+        return res.status(401).json({ message: "Invalid email or password" });
     }
 
     const token = generateToken(user);
@@ -17,7 +17,7 @@ export async function login(req: Request, res: Response) {
         token,
         user: {
             id: user.id,
-            name: user.name,
+            name: `${user.firstname} ${user.lastname}`,
             email: user.email,
             role: user.role
         },
