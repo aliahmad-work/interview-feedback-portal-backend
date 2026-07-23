@@ -1,15 +1,18 @@
 import bcrypt from "bcryptjs";
-import { users } from "../data/users";
+import prisma from "../lib/prisma";
 
 export async function login(email: string, password: string) {
-    const user = users.find(u => u.email === email);
+    const user = await prisma.user.findUnique({
+        where: { email },
+        include: { role: true }
+    });
 
     if (!user) {
         return null;
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    
+
     if (!isPasswordValid) {
         return null;
     }
