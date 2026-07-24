@@ -15,17 +15,109 @@ model Role {
 }
 
 model User {
-  id          String  @id @default(auto()) @map("_id") @db.ObjectId
-  employeeId  String  @unique
-  firstname   String
-  lastname    String
-  email       String  @unique
-  password    String
-  roleId      String  @db.ObjectId
-  role        Role    @relation(fields: [roleId], references: [id])
-  designation String?
-  phone       String?
-  lastLogin   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String  @id @default(auto()) @map("_id") @db.ObjectId
+  employeeId    String  @unique
+  firstname     String
+  lastname      String
+  email         String  @unique
+  password      String
+  roleId        String  @db.ObjectId
+  role          Role    @relation(fields: [roleId], references: [id])
+  designation   String?
+  phone         String?
+  lastLogin     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  candidates          Candidate[]
+  jobPositions        JobPositions[]
+  createdInterviews   Interview[]         @relation("InterviewCreator")
+  interviewIds        String[]            @db.ObjectId
+  interviews          Interview[]         @relation("InterviewInterviewers", fields: [interviewIds], references: [id])
+  interviewFeedbacks  InterviewFeedback[]
+
+  @@index([roleId])
+}
+
+model Candidate {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  candidateCode   String   @unique
+  firstname       String
+  lastname        String
+  email           String   @unique
+  phone           String   @unique
+  experience      String?
+  currentCompany  String?
+  currentPosition String?
+  skills          String[]
+  notes           String?
+  createdBy       String   @db.ObjectId
+  creator         User     @relation(fields: [createdBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  interviews          Interview[]
+  interviewFeedbacks  InterviewFeedback[]
+
+  @@index ([createdBy])
+}
+
+model JobPositions {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  title             String
+  requiredSkills    String[]
+  minimumExperience Int
+  maximumExperience Int?
+  description       String
+  status            String    @default("open")
+  createdBy         String    @db.ObjectId
+  creator           User      @relation(fields: [createdBy], references:[id])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  interviews        Interview[]
+
+  @@index([createdBy])
+}
+
+model Interview {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  round       Int
+  type        String?
+  date        String
+  startTime   DateTime
+  endTime     DateTime
+  status      String        @default("scheduled")
+  candidateId  String       @db.ObjectId
+  candidate   Candidate     @relation(fields: [candidateId], references: [id])
+  positionId  String        @db.ObjectId
+  position    JobPositions  @relation(fields: [positionId], references: [id])
+  createdBy   String        @db.ObjectId
+  creator     User          @relation("InterviewCreator", fields: [createdBy], references: [id])
+  interviewerIds   String[] @db.ObjectId
+  interviewers  User[]      @relation("InterviewInterviewers", fields: [interviewerIds], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  interviewFeedbacks InterviewFeedback[]
+
+  @@index([candidateId])
+  @@index([positionId])
+  @@index([createdBy])
+}
+
+model InterviewFeedback {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  interviewId       String    @db.ObjectId
+  interview         Interview @relation(fields: [interviewId], references: [id])
+  candidateId       String    @db.ObjectId
+  candidate         Candidate @relation(fields: [candidateId], references: [id])
+  interviewerId     String    @db.ObjectId
+  interviewer       User      @relation(fields: [interviewerId], references: [id])
+  rating            Int
+  recommendation    String
+  positiveComments  String
+  negativeComments  String
+  additionalComments String
+  submittedAt       DateTime  @default(now())
+
+  @@index([interviewId])
+  @@index([candidateId])
+  @@index([interviewerId])
 }

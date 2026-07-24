@@ -7,7 +7,7 @@ const router = Router();
 router.get(
     "admin/dashboard",
     authenticate,
-    authorize("ADMIN"),
+    authorize("admin"),
     (req, res) => {
         res.json({ message: "Admin Dashboard" });
     }
