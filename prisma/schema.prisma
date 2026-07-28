@@ -14,6 +14,15 @@ model Role {
   users       User[]
 }
 
+model Department {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  jobPositions JobPositions[]
+}
+
 model User {
   id            String  @id @default(auto()) @map("_id") @db.ObjectId
   employeeId    String  @unique
@@ -68,6 +77,8 @@ model JobPositions {
   maximumExperience Int?
   description       String
   status            String    @default("open")
+  departmentId      String    @db.ObjectId
+  department        Department @relation(fields: [departmentId], references: [id])
   createdBy         String    @db.ObjectId
   creator           User      @relation(fields: [createdBy], references:[id])
   createdAt         DateTime  @default(now())
@@ -75,6 +86,7 @@ model JobPositions {
   interviews        Interview[]
 
   @@index([createdBy])
+  @@index([departmentId])
 }
 
 model Interview {

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
-import { getInterviewerInterviews } from "../controllers/interview.controller";
+import { getInterviewerInterviews, getInterviewById } from "../controllers/interview.controller";
 
 const router = Router();
 
@@ -19,6 +19,13 @@ router.get(
     authenticate,
     authorize("interviewer"),
     getInterviewerInterviews
+);
+
+router.get(
+    "/interviews/:id",
+    authenticate,
+    authorize("interviewer"),
+    getInterviewById
 );
 
 export default router;
