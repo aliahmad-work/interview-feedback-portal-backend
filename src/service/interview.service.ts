@@ -143,3 +143,26 @@ export async function getInterviewById(interviewId: string, interviewerId: strin
 
     return interview;
 }
+
+export async function getCandidateDetails(candidateId: string) {
+    const candidate = await prisma.candidate.findUnique({
+        where: {
+            id: candidateId
+        },
+        select: {
+            id: true,
+            candidateCode: true,
+            firstname: true,
+            lastname: true,
+            email: true,
+            phone: true,
+            experience: true,
+            currentCompany: true,
+            currentPosition: true,
+            skills: true,
+            notes: true
+        }
+    });
+
+    return candidate;
+}

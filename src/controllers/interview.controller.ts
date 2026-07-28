@@ -26,3 +26,17 @@ export async function getInterviewById(req: Request, res: Response) {
         interview
     });
 }
+
+export async function getCandidateDetails(req: Request, res: Response) {
+    const { id } = req.params;
+
+    const candidate = await interviewServices.getCandidateDetails(id as string);
+
+    if (!candidate) {
+        return res.status(404).json({ message: "Candidate not found" });
+    }
+
+    return res.json({
+        candidate
+    });
+}
