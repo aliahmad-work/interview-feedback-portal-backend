@@ -19,7 +19,7 @@ export async function login(req: Request, res: Response) {
             id: user.id,
             name: `${user.firstname} ${user.lastname}`,
             email: user.email,
-            role: user.role
+            role: user.role.name
         },
     });
 }
