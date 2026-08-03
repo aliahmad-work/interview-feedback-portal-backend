@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
 import { getInterviewerInterviews, getInterviewById, getCandidateDetails } from "../controllers/interview.controller";
+import { submitFeedback, getFeedback } from "../controllers/feedback.controller";
 
 const router = Router();
 
@@ -34,5 +35,19 @@ router.get(
     authorize("interviewer"),
     getCandidateDetails
 )
+
+router.post(
+    "/feedback",
+    authenticate,
+    authorize("interviewer"),
+    submitFeedback
+);
+
+router.get(
+    "/feedback/:interviewId",
+    authenticate,
+    authorize("interviewer", "admin"),
+    getFeedback
+);
 
 export default router;
