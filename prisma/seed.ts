@@ -67,7 +67,34 @@ async function main() {
     },
   });
 
-  console.log('Users created:', { admin, interviewer1, interviewer2 });
+  const namedInterviewers = [
+    { firstname: 'Sarah', lastname: 'Malik', email: 'sarah.malik@company.com', password: 'sarah123', designation: 'Senior Interviewer' },
+    { firstname: 'Daniel', lastname: 'Shah', email: 'daniel.shah@company.com', password: 'daniel123', designation: 'Interviewer' },
+    { firstname: 'Ali', lastname: 'Hassan', email: 'ali.hassan@company.com', password: 'ali123', designation: 'Senior Interviewer' },
+    { firstname: 'Ahmed', lastname: 'Khan', email: 'ahmed.khan@company.com', password: 'ahmed123', designation: 'Interviewer' },
+    { firstname: 'Aisha', lastname: 'Noor', email: 'aisha.noor@company.com', password: 'aisha123', designation: 'Interviewer' },
+    { firstname: 'Michael', lastname: 'Reed', email: 'michael.reed@company.com', password: 'michael123', designation: 'Senior Interviewer' },
+  ];
+
+  const createdInterviewers = [];
+  for (let i = 0; i < namedInterviewers.length; i++) {
+    const ni = namedInterviewers[i];
+    const interviewer = await prisma.user.create({
+      data: {
+        employeeId: `EMP00${4 + i}`,
+        firstname: ni.firstname,
+        lastname: ni.lastname,
+        email: ni.email,
+        password: await bcrypt.hash(ni.password, 10),
+        roleId: interviewerRole.id,
+        designation: ni.designation,
+        phone: `+123456789${4 + i}`,
+      },
+    });
+    createdInterviewers.push(interviewer);
+  }
+
+  console.log('Users created:', { admin, interviewer1, interviewer2, namedInterviewers: createdInterviewers.map((u) => u.email) });
 
   // Create Departments
   const engineeringDept = await prisma.department.create({

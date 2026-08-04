@@ -1,5 +1,198 @@
 import prisma from "../lib/prisma";
 
+const isValidObjectId = (id: string) => /^[a-f\d]{24}$/i.test(id);
+
+export async function createInterview(data: {
+    candidateId: string;
+    positionId: string;
+    interviewerIds: string[];
+    date: string;
+    startTime: Date;
+    endTime: Date;
+    round?: number;
+    type?: string;
+    status?: string;
+    createdBy: string;
+}) {
+    if (!isValidObjectId(data.candidateId)) {
+        throw { status: 400, message: "Invalid candidate id" };
+    }
+    if (!isValidObjectId(data.positionId)) {
+        throw { status: 400, message: "Invalid position id" };
+    }
+    if (!data.interviewerIds.length) {
+        throw { status: 400, message: "At least one interviewer is required" };
+    }
+    for (const id of data.interviewerIds) {
+        if (!isValidObjectId(id)) {
+            throw { status: 400, message: "Invalid interviewer id" };
+        }
+    }
+
+    const candidate = await prisma.candidate.findUnique({ where: { id: data.candidateId } });
+    if (!candidate) {
+        throw { status: 404, message: "Candidate not found" };
+    }
+
+    const position = await prisma.jobPositions.findUnique({ where: { id: data.positionId } });
+    if (!position) {
+        throw { status: 404, message: "Job position not found" };
+    }
+
+    if (data.startTime >= data.endTime) {
+        throw { status: 400, message: "End time must be after start time" };
+    }
+
+    const interviewers = await prisma.user.findMany({
+        where: {
+            id: { in: data.interviewerIds },
+            role: { name: "interviewer" }
+        },
+        select: { id: true }
+    });
+
+    if (interviewers.length !== data.interviewerIds.length) {
+        throw { status: 400, message: "One or more assigned users are not valid interviewers" };
+    }
+
+    const existingCount = await prisma.interview.count({
+        where: { candidateId: data.candidateId }
+    });
+
+    for (const interviewerId of data.interviewerIds) {
+        const conflict = await prisma.interview.findFirst({
+            where: {
+                interviewerIds: { has: interviewerId },
+                startTime: { lt: data.endTime },
+                endTime: { gt: data.startTime }
+            },
+            select: { id: true, startTime: true, endTime: true }
+        });
+
+        if (conflict) {
+            throw {
+                status: 409,
+                message: `Interviewer has a conflicting interview (${conflict.startTime.toISOString()} - ${conflict.endTime.toISOString()})`
+            };
+        }
+    }
+
+    const interview = await prisma.interview.create({
+        data: {
+            round: data.round || existingCount + 1,
+            type: data.type || null,
+            date: data.date,
+            startTime: data.startTime,
+            endTime: data.endTime,
+            status: data.status || "scheduled",
+            candidateId: data.candidateId,
+            positionId: data.positionId,
+            createdBy: data.createdBy,
+            interviewerIds: data.interviewerIds
+        },
+        include: {
+            candidate: {
+                select: {
+                    id: true,
+                    candidateCode: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true,
+                    phone: true,
+                    experience: true,
+                    currentCompany: true,
+                    currentPosition: true,
+                    skills: true
+                }
+            },
+            position: {
+                select: {
+                    id: true,
+                    title: true,
+                    requiredSkills: true,
+                    minimumExperience: true,
+                    maximumExperience: true,
+                    description: true,
+                    status: true
+                }
+            },
+            creator: {
+                select: {
+                    id: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true
+                }
+            },
+            interviewers: {
+                select: {
+                    id: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true,
+                    designation: true
+                }
+            }
+        }
+    });
+
+    return interview;
+}
+
+export async function getAllInterviews() {
+    const interviews = await prisma.interview.findMany({
+        include: {
+            candidate: {
+                select: {
+                    id: true,
+                    candidateCode: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true,
+                    phone: true,
+                    experience: true,
+                    currentCompany: true,
+                    currentPosition: true,
+                    skills: true
+                }
+            },
+            position: {
+                select: {
+                    id: true,
+                    title: true,
+                    requiredSkills: true,
+                    minimumExperience: true,
+                    maximumExperience: true,
+                    description: true,
+                    status: true
+                }
+            },
+            creator: {
+                select: {
+                    id: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true
+                }
+            },
+            interviewers: {
+                select: {
+                    id: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true,
+                    designation: true
+                }
+            }
+        },
+        orderBy: {
+            startTime: 'asc'
+        }
+    });
+
+    return interviews;
+}
+
 export async function getInterviewerInterviews(interviewerId: string) {
     const interviews = await prisma.interview.findMany({
         where: {
