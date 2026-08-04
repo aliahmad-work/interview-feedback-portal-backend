@@ -3,7 +3,8 @@ import { body } from "express-validator";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
 import { validate } from "../middleware/validate.middleware";
-import { getCandidates, createCandidate } from "../controllers/candidate.controller";
+import { uploadResume } from "../middleware/upload.middleware";
+import { getCandidates, createCandidate, downloadResume } from "../controllers/candidate.controller";
 import { createInterview, getAllInterviews } from "../controllers/interview.controller";
 import { getInterviewers, getPositions } from "../controllers/admin.controller";
 
@@ -29,6 +30,7 @@ router.post(
     "/candidates",
     authenticate,
     authorize("admin"),
+    uploadResume,
     [
         body("firstname").notEmpty().withMessage("First name is required"),
         body("lastname").notEmpty().withMessage("Last name is required"),
@@ -37,6 +39,13 @@ router.post(
     ],
     validate,
     createCandidate
+);
+
+router.get(
+    "/candidates/:id/resume",
+    authenticate,
+    authorize("admin"),
+    downloadResume
 );
 
 router.get(

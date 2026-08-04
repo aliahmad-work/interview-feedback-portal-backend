@@ -36,6 +36,29 @@ export async function getCandidates(search?: string) {
     return candidates;
 }
 
+export async function getCandidateResume(id: string) {
+    const candidate = await prisma.candidate.findUnique({
+        where: { id },
+        select: {
+            firstname: true,
+            lastname: true,
+            resumeData: true,
+            resumeMimeType: true
+        }
+    });
+
+    if (!candidate || !candidate.resumeData) {
+        return null;
+    }
+
+    return {
+        firstname: candidate.firstname,
+        lastname: candidate.lastname,
+        resumeData: new Uint8Array(candidate.resumeData),
+        resumeMimeType: candidate.resumeMimeType
+    };
+}
+
 export async function createCandidate(data: {
     firstname: string;
     lastname: string;
@@ -47,6 +70,8 @@ export async function createCandidate(data: {
     skills?: string[];
     notes?: string;
     createdBy: string;
+    resumeData?: Buffer | null;
+    resumeMimeType?: string | null;
 }) {
     const normalizedEmail = data.email.trim().toLowerCase();
 
@@ -74,6 +99,8 @@ export async function createCandidate(data: {
             currentPosition: data.currentPosition || null,
             skills: data.skills || [],
             notes: data.notes || null,
+            resumeData: data.resumeData ? new Uint8Array(data.resumeData) : null,
+            resumeMimeType: data.resumeMimeType || null,
             createdBy: data.createdBy
         },
         select: {

@@ -59,6 +59,8 @@ model Candidate {
   currentPosition String?
   skills          String[]
   notes           String?
+  resumeData      Bytes?
+  resumeMimeType  String?
   createdBy       String   @db.ObjectId
   creator         User     @relation(fields: [createdBy], references: [id])
   createdAt       DateTime @default(now())
