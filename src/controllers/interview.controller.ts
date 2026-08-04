@@ -1,6 +1,41 @@
 import { Request, Response } from "express";
 import * as interviewServices from "../service/interview.service";
 
+export async function createInterview(req: Request, res: Response) {
+    try {
+        const user = (req as any).user;
+        const { candidateId, positionId, interviewerIds, date, startTime, endTime, round, type, status } = req.body;
+
+        const interview = await interviewServices.createInterview({
+            candidateId,
+            positionId,
+            interviewerIds,
+            date,
+            startTime: new Date(startTime),
+            endTime: new Date(endTime),
+            round: round ? Number(round) : undefined,
+            type,
+            status,
+            createdBy: user.id
+        });
+
+        return res.status(201).json({ interview });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
+export async function getAllInterviews(req: Request, res: Response) {
+    const interviews = await interviewServices.getAllInterviews();
+
+    return res.json({
+        interviews,
+        count: interviews.length
+    });
+}
+
 export async function getInterviewerInterviews(req: Request, res: Response) {
     const user = (req as any).user;
     
