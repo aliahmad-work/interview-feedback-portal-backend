@@ -5,7 +5,7 @@ import { authorize } from "../middleware/role.middleware";
 import { validate } from "../middleware/validate.middleware";
 import { getCandidates, createCandidate } from "../controllers/candidate.controller";
 import { createInterview, getAllInterviews } from "../controllers/interview.controller";
-import { getInterviewers, getPositions } from "../controllers/admin.controller";
+import { getInterviewers, getPositions, getDepartments, createUser, createPosition } from "../controllers/admin.controller";
 
 const router = Router();
 
@@ -67,6 +67,43 @@ router.get(
     authenticate,
     authorize("admin"),
     getInterviewers
+);
+
+router.post(
+    "/users",
+    authenticate,
+    authorize("admin"),
+    [
+        body("firstname").notEmpty().withMessage("First name is required"),
+        body("lastname").notEmpty().withMessage("Last name is required"),
+        body("email").isEmail().withMessage("A valid email is required"),
+        body("password").isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
+        body("role").notEmpty().withMessage("Role is required")
+    ],
+    validate,
+    createUser
+);
+
+router.get(
+    "/departments",
+    authenticate,
+    authorize("admin"),
+    getDepartments
+);
+
+router.post(
+    "/positions",
+    authenticate,
+    authorize("admin"),
+    [
+        body("title").notEmpty().withMessage("Title is required"),
+        body("departmentId").notEmpty().withMessage("Department is required"),
+        body("requiredSkills").isArray({ min: 1 }).withMessage("At least one required skill is needed"),
+        body("minimumExperience").isInt({ min: 0 }).withMessage("Minimum experience must be a number"),
+        body("description").notEmpty().withMessage("Description is required")
+    ],
+    validate,
+    createPosition
 );
 
 router.get(
