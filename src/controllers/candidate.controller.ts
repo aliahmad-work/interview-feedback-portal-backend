@@ -40,6 +40,61 @@ export async function createCandidate(req: Request, res: Response) {
     }
 }
 
+export async function getCandidateById(req: Request, res: Response) {
+    try {
+        const id = req.params.id as string;
+        const candidate = await candidateServices.getCandidateById(id);
+        return res.json({ candidate });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
+export async function updateCandidate(req: Request, res: Response) {
+    try {
+        const id = req.params.id as string;
+        const file = req.file as Express.Multer.File | undefined;
+
+        const candidate = await candidateServices.updateCandidate(id, {
+            firstname: req.body.firstname,
+            lastname: req.body.lastname,
+            email: req.body.email,
+            phone: req.body.phone,
+            experience: req.body.experience,
+            currentCompany: req.body.currentCompany,
+            currentPosition: req.body.currentPosition,
+            skills: Array.isArray(req.body.skills)
+                ? req.body.skills
+                : typeof req.body.skills === 'string'
+                    ? req.body.skills.split(',').map((s: string) => s.trim()).filter(Boolean)
+                    : undefined,
+            notes: req.body.notes,
+            resumeData: file?.buffer || undefined,
+            resumeMimeType: file?.mimetype || undefined
+        });
+
+        return res.json({ candidate });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
+export async function deleteCandidate(req: Request, res: Response) {
+    try {
+        const id = req.params.id as string;
+        const result = await candidateServices.deleteCandidate(id);
+        return res.json(result);
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
 export async function downloadResume(req: Request, res: Response) {
     try {
         const id = req.params.id as string;
