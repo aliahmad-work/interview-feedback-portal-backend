@@ -4,8 +4,8 @@ import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
 import { validate } from "../middleware/validate.middleware";
 import { uploadResume } from "../middleware/upload.middleware";
-import { getCandidates, createCandidate, downloadResume } from "../controllers/candidate.controller";
 import { createInterview, getAllInterviews, updateDecision } from "../controllers/interview.controller";
+import { getCandidates, getCandidateById, createCandidate, updateCandidate, deleteCandidate, downloadResume } from "../controllers/candidate.controller";
 import { getInterviewers, getPositions, getDepartments, createUser, createPosition } from "../controllers/admin.controller";
 import { VALID_DECISIONS } from "../service/interview.service";
 
@@ -40,6 +40,35 @@ router.post(
     ],
     validate,
     createCandidate
+);
+
+router.get(
+    "/candidates/:id",
+    authenticate,
+    authorize("admin"),
+    getCandidateById
+);
+
+router.put(
+    "/candidates/:id",
+    authenticate,
+    authorize("admin"),
+    uploadResume,
+    [
+        body("firstname").notEmpty().withMessage("First name is required"),
+        body("lastname").notEmpty().withMessage("Last name is required"),
+        body("email").isEmail().withMessage("A valid email is required"),
+        body("phone").notEmpty().withMessage("Phone is required")
+    ],
+    validate,
+    updateCandidate
+);
+
+router.delete(
+    "/candidates/:id",
+    authenticate,
+    authorize("admin"),
+    deleteCandidate
 );
 
 router.get(
