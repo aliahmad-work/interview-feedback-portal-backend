@@ -68,7 +68,7 @@ export async function submitFeedback(data: SubmitFeedbackData) {
 
     await tx.interview.update({
       where: { id: data.interviewId },
-      data: { status: "completed" }
+      data: { status: "completed", decision: "pending" }
     });
 
     return feedback;

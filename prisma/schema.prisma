@@ -92,23 +92,26 @@ model JobPositions {
 }
 
 model Interview {
-  id          String        @id @default(auto()) @map("_id") @db.ObjectId
-  round       Int
-  type        String?
-  date        String
-  startTime   DateTime
-  endTime     DateTime
-  status      String        @default("scheduled")
-  candidateId  String       @db.ObjectId
-  candidate   Candidate     @relation(fields: [candidateId], references: [id])
-  positionId  String        @db.ObjectId
-  position    JobPositions  @relation(fields: [positionId], references: [id])
-  createdBy   String        @db.ObjectId
-  creator     User          @relation("InterviewCreator", fields: [createdBy], references: [id])
-  interviewerIds   String[] @db.ObjectId
-  interviewers  User[]      @relation("InterviewInterviewers", fields: [interviewerIds], references: [id])
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  round             Int
+  type              String?
+  date              String
+  startTime         DateTime
+  endTime           DateTime
+  status            String        @default("scheduled")
+  decision          String        @default("pending")
+  decisionUpdatedAt DateTime?
+  decisionUpdatedBy String?       @db.ObjectId
+  candidateId       String        @db.ObjectId
+  candidate         Candidate     @relation(fields: [candidateId], references: [id])
+  positionId        String        @db.ObjectId
+  position          JobPositions  @relation(fields: [positionId], references: [id])
+  createdBy         String        @db.ObjectId
+  creator           User          @relation("InterviewCreator", fields: [createdBy], references: [id])
+  interviewerIds    String[]      @db.ObjectId
+  interviewers      User[]        @relation("InterviewInterviewers", fields: [interviewerIds], references: [id])
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
   interviewFeedbacks InterviewFeedback[]
 
   @@index([candidateId])
