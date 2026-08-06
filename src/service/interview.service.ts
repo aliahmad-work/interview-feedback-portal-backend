@@ -139,6 +139,28 @@ export async function createInterview(data: {
     return interview;
 }
 
+const feedbackSelect = {
+    id: true,
+    interviewId: true,
+    candidateId: true,
+    interviewerId: true,
+    interviewer: {
+        select: {
+            id: true,
+            firstname: true,
+            lastname: true,
+            email: true,
+            designation: true
+        }
+    },
+    rating: true,
+    recommendation: true,
+    positiveComments: true,
+    negativeComments: true,
+    additionalComments: true,
+    submittedAt: true
+} as const;
+
 export async function getAllInterviews() {
     const interviews = await prisma.interview.findMany({
         include: {
@@ -183,6 +205,12 @@ export async function getAllInterviews() {
                     email: true,
                     designation: true
                 }
+            },
+            interviewFeedbacks: {
+                select: feedbackSelect,
+                orderBy: {
+                    submittedAt: 'asc'
+                }
             }
         },
         orderBy: {
@@ -191,6 +219,38 @@ export async function getAllInterviews() {
     });
 
     return interviews;
+}
+
+export const VALID_DECISIONS = ["pending", "hired", "rejected", "hold", "next_round"];
+
+export async function updateInterviewDecision(interviewId: string, decision: string, adminId: string) {
+    if (!isValidObjectId(interviewId)) {
+        throw { status: 400, message: "Invalid interview id" };
+    }
+    if (!VALID_DECISIONS.includes(decision)) {
+        throw { status: 400, message: `Decision must be one of: ${VALID_DECISIONS.join(", ")}` };
+    }
+
+    const interview = await prisma.interview.findUnique({ where: { id: interviewId } });
+    if (!interview) {
+        throw { status: 404, message: "Interview not found" };
+    }
+
+    return prisma.interview.update({
+        where: { id: interviewId },
+        data: {
+            decision,
+            decisionUpdatedAt: new Date(),
+            decisionUpdatedBy: adminId
+        },
+        select: {
+            id: true,
+            status: true,
+            decision: true,
+            decisionUpdatedAt: true,
+            decisionUpdatedBy: true
+        }
+    });
 }
 
 export async function getInterviewerInterviews(interviewerId: string) {

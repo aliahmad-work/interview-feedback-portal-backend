@@ -5,8 +5,9 @@ import { authorize } from "../middleware/role.middleware";
 import { validate } from "../middleware/validate.middleware";
 import { uploadResume } from "../middleware/upload.middleware";
 import { getCandidates, createCandidate, downloadResume } from "../controllers/candidate.controller";
-import { createInterview, getAllInterviews } from "../controllers/interview.controller";
+import { createInterview, getAllInterviews, updateDecision } from "../controllers/interview.controller";
 import { getInterviewers, getPositions, getDepartments, createUser, createPosition } from "../controllers/admin.controller";
+import { VALID_DECISIONS } from "../service/interview.service";
 
 const router = Router();
 
@@ -53,6 +54,19 @@ router.get(
     authenticate,
     authorize("admin"),
     getAllInterviews
+);
+
+router.patch(
+    "/interviews/:id/decision",
+    authenticate,
+    authorize("admin"),
+    [
+        body("decision")
+            .isIn(VALID_DECISIONS)
+            .withMessage(`Decision must be one of: ${VALID_DECISIONS.join(", ")}`)
+    ],
+    validate,
+    updateDecision
 );
 
 router.post(

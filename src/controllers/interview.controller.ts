@@ -75,3 +75,19 @@ export async function getCandidateDetails(req: Request, res: Response) {
         candidate
     });
 }
+
+export async function updateDecision(req: Request, res: Response) {
+    try {
+        const user = (req as any).user;
+        const { id } = req.params;
+        const { decision } = req.body;
+
+        const updated = await interviewServices.updateInterviewDecision(id as string, decision, user.id);
+
+        return res.json({ interview: updated });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
