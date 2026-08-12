@@ -39,9 +39,11 @@ model User {
   updatedAt     DateTime @updatedAt
   candidates          Candidate[]
   jobPositions        JobPositions[]
-  createdInterviews   Interview[]         @relation("InterviewCreator")
-  interviewIds        String[]            @db.ObjectId
-  interviews          Interview[]         @relation("InterviewInterviewers", fields: [interviewIds], references: [id])
+  createdInterviews   Interview[]            @relation("InterviewCreator")
+  interviewIds        String[]               @db.ObjectId
+  interviews          Interview[]            @relation("InterviewInterviewers", fields: [interviewIds], references: [id])
+  roundIds            String[]               @db.ObjectId
+  rounds              InterviewRound[]       @relation("RoundInterviewers", fields: [roundIds], references: [id])
   interviewFeedbacks  InterviewFeedback[]
 
   @@index([roleId])
@@ -112,6 +114,7 @@ model Interview {
   interviewers      User[]        @relation("InterviewInterviewers", fields: [interviewerIds], references: [id])
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
+  rounds            InterviewRound[]
   interviewFeedbacks InterviewFeedback[]
 
   @@index([candidateId])
@@ -119,10 +122,35 @@ model Interview {
   @@index([createdBy])
 }
 
+model InterviewRound {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  interviewId     String         @db.ObjectId
+  interview       Interview      @relation(fields: [interviewId], references: [id])
+  roundNumber     Int
+  type            String?
+  duration        Int
+  date            String?
+  startTime       DateTime?
+  endTime         DateTime?
+  status          String         @default("pending")
+  decision        String         @default("pending")
+  decisionUpdatedAt DateTime?
+  decisionUpdatedBy String?      @db.ObjectId
+  interviewerIds  String[]       @db.ObjectId
+  interviewers    User[]         @relation("RoundInterviewers", fields: [interviewerIds], references: [id])
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  interviewFeedbacks InterviewFeedback[]
+
+  @@index([interviewId])
+}
+
 model InterviewFeedback {
   id                String    @id @default(auto()) @map("_id") @db.ObjectId
   interviewId       String    @db.ObjectId
   interview         Interview @relation(fields: [interviewId], references: [id])
+  roundId           String?   @db.ObjectId
+  round             InterviewRound? @relation(fields: [roundId], references: [id])
   candidateId       String    @db.ObjectId
   candidate         Candidate @relation(fields: [candidateId], references: [id])
   interviewerId     String    @db.ObjectId
@@ -135,6 +163,7 @@ model InterviewFeedback {
   submittedAt       DateTime  @default(now())
 
   @@index([interviewId])
+  @@index([roundId])
   @@index([candidateId])
   @@index([interviewerId])
 }

@@ -7,6 +7,7 @@ async function main() {
   console.log('Starting seed...');
 
   await prisma.interviewFeedback.deleteMany();
+  await prisma.interviewRound.deleteMany();
   await prisma.interview.deleteMany();
   await prisma.candidate.deleteMany();
   await prisma.jobPositions.deleteMany();
@@ -96,7 +97,6 @@ async function main() {
 
   console.log('Users created:', { admin, interviewer1, interviewer2, namedInterviewers: createdInterviewers.map((u) => u.email) });
 
-  // Create Departments
   const engineeringDept = await prisma.department.create({
     data: {
       name: 'Engineering',
@@ -113,7 +113,6 @@ async function main() {
 
   console.log('Departments created:', { engineeringDept, productDept });
 
-  // Create Job Positions
   const seniorDevPosition = await prisma.jobPositions.create({
     data: {
       title: 'Senior Software Engineer',
@@ -173,7 +172,6 @@ async function main() {
     productManagerPosition,
   });
 
-  // Create Candidates
   const candidates = [];
   const candidateNames = [
     { first: 'Michael', last: 'Johnson' },
@@ -209,15 +207,13 @@ async function main() {
 
   console.log('Candidates created:', candidates.length);
 
-  // Create Interviews
-  const interviews = [];
   const interviewTypes = ['Technical', 'Behavioral', 'System Design', 'Cultural Fit'];
-  const statuses = ['scheduled', 'completed', 'cancelled', 'in-progress'];
 
-  for (let i = 0; i < 20; i++) {
+  // Create interviews WITHOUT rounds (backward compatible)
+  const directInterviews = [];
+  for (let i = 0; i < 10; i++) {
     const candidate = candidates[i % candidates.length];
     const position = [seniorDevPosition, frontendDevPosition, backendDevPosition, productManagerPosition][i % 4];
-    const round = Math.floor(i / 5) + 1;
     const interviewDate = new Date();
     interviewDate.setDate(interviewDate.getDate() + i);
     
@@ -229,22 +225,180 @@ async function main() {
 
     const interview = await prisma.interview.create({
       data: {
-        round,
+        round: i + 1,
         type: interviewTypes[i % interviewTypes.length],
         date: interviewDate.toISOString().split('T')[0],
         startTime,
         endTime,
-        status: statuses[i % statuses.length],
+        status: i < 5 ? 'completed' : 'scheduled',
         candidateId: candidate.id,
         positionId: position.id,
         createdBy: admin.id,
         interviewerIds: [interviewer1.id, interviewer2.id],
       },
     });
-    interviews.push(interview);
+    directInterviews.push(interview);
   }
 
-  console.log('Interviews created:', interviews.length);
+  console.log('Direct interviews created:', directInterviews.length);
+
+  // Create interviews WITH rounds (multi-round interviews)
+  const multiRoundInterviews = [];
+  for (let i = 0; i < 5; i++) {
+    const candidate = candidates[5 + i];
+    const position = [seniorDevPosition, frontendDevPosition, backendDevPosition, productManagerPosition][i % 4];
+    const interviewDate = new Date();
+    interviewDate.setDate(interviewDate.getDate() + 10 + i);
+    
+    const startTime = new Date(interviewDate);
+    startTime.setHours(10 + (i % 4), 0, 0);
+    
+    const endTime = new Date(startTime);
+    endTime.setHours(startTime.getHours() + 1);
+
+    const interview = await prisma.interview.create({
+      data: {
+        round: 1,
+        type: interviewTypes[0],
+        date: interviewDate.toISOString().split('T')[0],
+        startTime,
+        endTime,
+        status: 'scheduled',
+        candidateId: candidate.id,
+        positionId: position.id,
+        createdBy: admin.id,
+        interviewerIds: [interviewer1.id, interviewer2.id],
+      },
+    });
+
+    // Create rounds for this interview
+    const round1Status = i < 3 ? 'completed' : 'scheduled';
+    const round1Decision = i === 0 || i === 1 ? 'next_round' : i === 2 ? 'pending' : 'pending';
+
+    const round1 = await prisma.interviewRound.create({
+      data: {
+        interviewId: interview.id,
+        roundNumber: 1,
+        type: 'Technical',
+        duration: 60,
+        date: interviewDate.toISOString().split('T')[0],
+        startTime,
+        endTime,
+        status: round1Status,
+        decision: round1Decision,
+        decisionUpdatedAt: round1Decision === 'next_round' ? new Date() : null,
+        decisionUpdatedBy: round1Decision === 'next_round' ? admin.id : null,
+        interviewerIds: [interviewer1.id, createdInterviewers[0].id],
+      },
+    });
+
+    const round2Date = new Date(interviewDate);
+    round2Date.setDate(round2Date.getDate() + 3);
+    const round2Start = new Date(round2Date);
+    round2Start.setHours(14, 0, 0);
+    const round2End = new Date(round2Start);
+    round2End.setHours(15, 0, 0);
+
+    const round2Status = i === 0 ? 'completed' : i === 1 ? 'scheduled' : 'pending';
+    const round2Decision = i === 0 ? 'pending' : 'pending';
+
+    const round2 = await prisma.interviewRound.create({
+      data: {
+        interviewId: interview.id,
+        roundNumber: 2,
+        type: 'Behavioral',
+        duration: 45,
+        date: i < 2 ? round2Date.toISOString().split('T')[0] : null,
+        startTime: i < 2 ? round2Start : null,
+        endTime: i < 2 ? round2End : null,
+        status: round2Status,
+        decision: round2Decision,
+        interviewerIds: [interviewer2.id, createdInterviewers[1].id],
+      },
+    });
+
+    const round3 = await prisma.interviewRound.create({
+      data: {
+        interviewId: interview.id,
+        roundNumber: 3,
+        type: 'System Design',
+        duration: 90,
+        date: null,
+        startTime: null,
+        endTime: null,
+        status: 'pending',
+        interviewerIds: [createdInterviewers[2].id, createdInterviewers[3].id],
+      },
+    });
+
+    multiRoundInterviews.push({ interview, rounds: [round1, round2, round3] });
+  }
+
+  console.log('Multi-round interviews created:', multiRoundInterviews.length);
+
+  // Create some feedback for completed interviews
+  for (const interview of directInterviews.slice(0, 3)) {
+    await prisma.interviewFeedback.create({
+      data: {
+        interviewId: interview.id,
+        candidateId: interview.candidateId,
+        interviewerId: interviewer1.id,
+        rating: 4,
+        recommendation: 'Strong Hire',
+        positiveComments: 'Excellent technical skills and problem-solving ability',
+        negativeComments: 'Could improve on communication',
+        additionalComments: 'Would recommend for senior role',
+      },
+    });
+
+    await prisma.interviewFeedback.create({
+      data: {
+        interviewId: interview.id,
+        candidateId: interview.candidateId,
+        interviewerId: interviewer2.id,
+        rating: 3,
+        recommendation: 'Hire',
+        positiveComments: 'Good cultural fit and team player',
+        negativeComments: 'Needs more experience with distributed systems',
+        additionalComments: '',
+      },
+    });
+  }
+
+  // Create feedback for multi-round interviews (round-level feedback)
+  for (const { interview, rounds } of multiRoundInterviews.slice(0, 2)) {
+    if (rounds[0].status === 'completed') {
+      await prisma.interviewFeedback.create({
+        data: {
+          interviewId: interview.id,
+          roundId: rounds[0].id,
+          candidateId: interview.candidateId,
+          interviewerId: interviewer1.id,
+          rating: 5,
+          recommendation: 'Strong Hire',
+          positiveComments: 'Outstanding coding skills and system design knowledge',
+          negativeComments: '',
+          additionalComments: 'Top candidate for the role',
+        },
+      });
+
+      await prisma.interviewFeedback.create({
+        data: {
+          interviewId: interview.id,
+          roundId: rounds[0].id,
+          candidateId: interview.candidateId,
+          interviewerId: createdInterviewers[0].id,
+          rating: 4,
+          recommendation: 'Hire',
+          positiveComments: 'Strong problem-solving abilities',
+          negativeComments: 'Minor time management issues',
+          additionalComments: '',
+        },
+      });
+    }
+  }
+
+  console.log('Feedback created');
   console.log('Seed completed successfully!');
 }
 

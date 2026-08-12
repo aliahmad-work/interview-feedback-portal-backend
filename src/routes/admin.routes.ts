@@ -4,7 +4,16 @@ import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
 import { validate } from "../middleware/validate.middleware";
 import { uploadResume } from "../middleware/upload.middleware";
-import { createInterview, getAllInterviews, updateDecision } from "../controllers/interview.controller";
+import {
+    createInterview,
+    getAllInterviews,
+    updateDecision,
+    getInterviewRounds,
+    addInterviewRounds,
+    updateRoundSchedule,
+    cancelRound,
+    updateRoundDecision
+} from "../controllers/interview.controller";
 import { getCandidates, getCandidateById, createCandidate, updateCandidate, deleteCandidate, downloadResume } from "../controllers/candidate.controller";
 import { getInterviewers, getPositions, getDepartments, createUser, createPosition } from "../controllers/admin.controller";
 import { VALID_DECISIONS } from "../service/interview.service";
@@ -104,14 +113,63 @@ router.post(
     authorize("admin"),
     [
         body("candidateId").notEmpty().withMessage("Candidate is required"),
-        body("positionId").notEmpty().withMessage("Position is required"),
-        body("interviewerIds").isArray({ min: 1 }).withMessage("At least one interviewer is required"),
+        body("positionId").notEmpty().withMessage("Position is required")
+    ],
+    validate,
+    createInterview
+);
+
+router.get(
+    "/interviews/:id/rounds",
+    authenticate,
+    authorize("admin"),
+    getInterviewRounds
+);
+
+router.post(
+    "/interviews/:id/rounds",
+    authenticate,
+    authorize("admin"),
+    [
+        body("rounds").isArray({ min: 1 }).withMessage("At least one round is required"),
+        body("rounds.*.interviewerIds").isArray({ min: 1 }).withMessage("At least one interviewer is required per round"),
+        body("rounds.*.duration").isInt({ min: 15 }).withMessage("Duration must be at least 15 minutes")
+    ],
+    validate,
+    addInterviewRounds
+);
+
+router.patch(
+    "/interviews/:id/rounds/:roundId/schedule",
+    authenticate,
+    authorize("admin"),
+    [
         body("date").notEmpty().withMessage("Date is required"),
         body("startTime").notEmpty().withMessage("Start time is required"),
         body("endTime").notEmpty().withMessage("End time is required")
     ],
     validate,
-    createInterview
+    updateRoundSchedule
+);
+
+router.patch(
+    "/interviews/:id/rounds/:roundId/cancel",
+    authenticate,
+    authorize("admin"),
+    cancelRound
+);
+
+router.patch(
+    "/interviews/:id/rounds/:roundId/decision",
+    authenticate,
+    authorize("admin"),
+    [
+        body("decision")
+            .isIn(VALID_DECISIONS)
+            .withMessage(`Decision must be one of: ${VALID_DECISIONS.join(", ")}`)
+    ],
+    validate,
+    updateRoundDecision
 );
 
 router.get(
