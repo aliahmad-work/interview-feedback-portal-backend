@@ -1,23 +1,38 @@
 import { Request, Response } from "express";
 import * as interviewServices from "../service/interview.service";
+import * as interviewRoundServices from "../service/interview-round.service";
 
 export async function createInterview(req: Request, res: Response) {
     try {
         const user = (req as any).user;
-        const { candidateId, positionId, interviewerIds, date, startTime, endTime, round, type, status } = req.body;
+        const { candidateId, positionId, interviewerIds, date, startTime, endTime, round, type, status, rounds } = req.body;
 
-        const interview = await interviewServices.createInterview({
+        const interviewData: any = {
             candidateId,
             positionId,
-            interviewerIds,
-            date,
-            startTime: new Date(startTime),
-            endTime: new Date(endTime),
-            round: round ? Number(round) : undefined,
-            type,
-            status,
             createdBy: user.id
-        });
+        };
+
+        if (rounds && rounds.length > 0) {
+            interviewData.rounds = rounds.map((r: any) => ({
+                interviewerIds: r.interviewerIds,
+                type: r.type,
+                duration: Number(r.duration),
+                date: r.date || undefined,
+                startTime: r.startTime ? new Date(r.startTime) : undefined,
+                endTime: r.endTime ? new Date(r.endTime) : undefined
+            }));
+        } else {
+            interviewData.interviewerIds = interviewerIds;
+            interviewData.date = date;
+            interviewData.startTime = startTime ? new Date(startTime) : undefined;
+            interviewData.endTime = endTime ? new Date(endTime) : undefined;
+            interviewData.round = round ? Number(round) : undefined;
+            interviewData.type = type;
+            interviewData.status = status;
+        }
+
+        const interview = await interviewServices.createInterview(interviewData);
 
         return res.status(201).json({ interview });
     } catch (error: any) {
@@ -85,6 +100,99 @@ export async function updateDecision(req: Request, res: Response) {
         const updated = await interviewServices.updateInterviewDecision(id as string, decision, user.id);
 
         return res.json({ interview: updated });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
+export async function getInterviewRounds(req: Request, res: Response) {
+    try {
+        const { id } = req.params;
+
+        const rounds = await interviewRoundServices.getRoundsByInterview(id as string);
+
+        return res.json({ rounds });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
+export async function addInterviewRounds(req: Request, res: Response) {
+    try {
+        const { id } = req.params;
+        const { rounds } = req.body;
+
+        if (!rounds || !Array.isArray(rounds) || rounds.length === 0) {
+            return res.status(400).json({ message: "At least one round is required" });
+        }
+
+        const createdRounds = await interviewRoundServices.createInterviewRounds(id as string, rounds);
+
+        return res.status(201).json({ rounds: createdRounds });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
+export async function updateRoundSchedule(req: Request, res: Response) {
+    try {
+        const { id, roundId } = req.params;
+        const { date, startTime, endTime } = req.body;
+
+        if (!date || !startTime || !endTime) {
+            return res.status(400).json({ message: "date, startTime, and endTime are required" });
+        }
+
+        const updated = await interviewRoundServices.updateRoundSchedule(
+            id as string,
+            roundId as string,
+            date,
+            new Date(startTime),
+            new Date(endTime)
+        );
+
+        return res.json({ round: updated });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
+export async function cancelRound(req: Request, res: Response) {
+    try {
+        const { id, roundId } = req.params;
+
+        const updated = await interviewRoundServices.cancelRound(id as string, roundId as string);
+
+        return res.json({ round: updated });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
+export async function updateRoundDecision(req: Request, res: Response) {
+    try {
+        const user = (req as any).user;
+        const { id, roundId } = req.params;
+        const { decision } = req.body;
+
+        const updated = await interviewRoundServices.updateRoundDecision(
+            id as string,
+            roundId as string,
+            decision,
+            user.id
+        );
+
+        return res.json({ round: updated });
     } catch (error: any) {
         const status = error.status || 500;
         const message = error.message || "Internal server error";

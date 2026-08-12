@@ -4,7 +4,7 @@ import * as feedbackService from "../service/feedback.service";
 export async function submitFeedback(req: Request, res: Response) {
     try {
         const user = (req as any).user;
-        const { interviewId, rating, recommendation, positiveComments, negativeComments, additionalComments } = req.body;
+        const { interviewId, roundId, rating, recommendation, positiveComments, negativeComments, additionalComments } = req.body;
 
         if (!interviewId || !rating || !recommendation || !positiveComments || !negativeComments) {
             return res.status(400).json({ message: "Missing required fields: interviewId, rating, recommendation, positiveComments, negativeComments" });
@@ -12,6 +12,7 @@ export async function submitFeedback(req: Request, res: Response) {
 
         const feedback = await feedbackService.submitFeedback({
             interviewId,
+            roundId: roundId || undefined,
             interviewerId: user.id,
             rating: Number(rating),
             recommendation,
