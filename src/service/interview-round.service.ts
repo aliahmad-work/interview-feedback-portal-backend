@@ -464,3 +464,26 @@ export async function updateRoundDecision(
 
     return updated;
 }
+
+export async function isRoundVisibleToInterviewers(interviewId: string, roundNumber: number): Promise<boolean> {
+    // Round 1 is always visible if assigned
+    if (roundNumber === 1) {
+        return true;
+    }
+
+    // For rounds 2+, check if the previous round has a "next_round" decision
+    const previousRound = await prisma.interviewRound.findFirst({
+        where: {
+            interviewId,
+            roundNumber: roundNumber - 1
+        },
+        select: { decision: true, status: true }
+    });
+
+    if (!previousRound) {
+        return false;
+    }
+
+    // Round is visible if previous round has "next_round" decision
+    return previousRound.decision === "next_round";
+}
