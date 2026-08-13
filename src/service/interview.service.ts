@@ -1,5 +1,5 @@
 import prisma from "../lib/prisma";
-import { CreateRoundData, createInterviewRounds, getCurrentRound, updateRoundDecision, VALID_DECISIONS } from "./interview-round.service";
+import { CreateRoundData, createInterviewRounds, getCurrentRound, updateRoundDecision, VALID_DECISIONS, isRoundVisibleToInterviewers } from "./interview-round.service";
 
 export { VALID_DECISIONS };
 
@@ -521,7 +521,7 @@ export async function getInterviewerInterviews(interviewerId: string) {
                     rounds: {
                         some: {
                             interviewerIds: { has: interviewerId },
-                            status: { in: ["scheduled", "in-progress", "completed"] }
+                            status: { in: ["pending", "scheduled", "in-progress", "completed"] }
                         }
                     }
                 }
@@ -570,10 +570,6 @@ export async function getInterviewerInterviews(interviewerId: string) {
                 }
             },
             rounds: {
-                where: {
-                    interviewerIds: { has: interviewerId },
-                    status: { in: ["scheduled", "in-progress", "completed"] }
-                },
                 include: {
                     interviewers: {
                         select: {
@@ -593,7 +589,50 @@ export async function getInterviewerInterviews(interviewerId: string) {
         }
     });
 
-    return interviews;
+    // Filter rounds based on visibility rules
+    const filteredInterviews: any[] = [];
+    for (const interview of interviews) {
+        const totalRoundsCount = await prisma.interviewRound.count({
+            where: { interviewId: interview.id }
+        });
+        const hasRoundsInDb = totalRoundsCount > 0;
+
+        const interviewerRounds = interview.rounds.filter(r => r.interviewerIds.includes(interviewerId));
+        const visibleInterviewerRounds = await Promise.all(
+            interviewerRounds.map(async (round) => {
+                const isVisible = await isRoundVisibleToInterviewers(interview.id, round.roundNumber);
+                return isVisible ? round : null;
+            })
+        );
+        const activeRounds = visibleInterviewerRounds.filter((r): r is typeof r => r !== null);
+
+        if (hasRoundsInDb && activeRounds.length === 0) {
+            continue;
+        }
+
+        const processedRounds = await Promise.all(
+            interview.rounds.map(async (round) => {
+                const isVisible = await isRoundVisibleToInterviewers(interview.id, round.roundNumber);
+                if (isVisible) {
+                    return round;
+                } else {
+                    return {
+                        ...round,
+                        date: null,
+                        startTime: null,
+                        endTime: null
+                    };
+                }
+            })
+        );
+
+        filteredInterviews.push({
+            ...interview,
+            rounds: processedRounds
+        });
+    }
+
+    return filteredInterviews;
 }
 
 export async function getInterviewById(interviewId: string, interviewerId: string) {
@@ -606,7 +645,7 @@ export async function getInterviewById(interviewId: string, interviewerId: strin
                     rounds: {
                         some: {
                             interviewerIds: { has: interviewerId },
-                            status: { in: ["scheduled", "in-progress", "completed"] }
+                            status: { in: ["pending", "scheduled", "in-progress", "completed"] }
                         }
                     }
                 }
@@ -665,7 +704,6 @@ export async function getInterviewById(interviewId: string, interviewerId: strin
                 }
             },
             rounds: {
-                where: { status: { in: ["scheduled", "in-progress", "completed"] } },
                 include: {
                     interviewers: {
                         select: {
@@ -722,7 +760,48 @@ export async function getInterviewById(interviewId: string, interviewerId: strin
         }
     });
 
-    return interview;
+    if (!interview) {
+        return null;
+    }
+
+    const totalRoundsCount = await prisma.interviewRound.count({
+        where: { interviewId: interview.id }
+    });
+    const hasRoundsInDb = totalRoundsCount > 0;
+
+    const interviewerRounds = interview.rounds.filter(r => r.interviewerIds.includes(interviewerId));
+    const visibleInterviewerRounds = await Promise.all(
+        interviewerRounds.map(async (round) => {
+            const isVisible = await isRoundVisibleToInterviewers(interview.id, round.roundNumber);
+            return isVisible ? round : null;
+        })
+    );
+    const activeRounds = visibleInterviewerRounds.filter((r): r is typeof r => r !== null);
+
+    if (hasRoundsInDb && activeRounds.length === 0) {
+        return null;
+    }
+
+    const processedRounds = await Promise.all(
+        interview.rounds.map(async (round) => {
+            const isVisible = await isRoundVisibleToInterviewers(interview.id, round.roundNumber);
+            if (isVisible) {
+                return round;
+            } else {
+                return {
+                    ...round,
+                    date: null,
+                    startTime: null,
+                    endTime: null
+                };
+            }
+        })
+    );
+
+    return {
+        ...interview,
+        rounds: processedRounds
+    };
 }
 
 export async function getCandidateDetails(candidateId: string) {
