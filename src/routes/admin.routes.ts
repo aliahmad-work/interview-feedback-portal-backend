@@ -7,6 +7,8 @@ import { uploadResume } from "../middleware/upload.middleware";
 import {
     createInterview,
     getAllInterviews,
+    updateInterview,
+    deleteInterview,
     updateDecision,
     getInterviewRounds,
     addInterviewRounds,
@@ -14,6 +16,7 @@ import {
     cancelRound,
     updateRoundDecision
 } from "../controllers/interview.controller";
+
 import { getCandidates, getCandidateById, createCandidate, updateCandidate, deleteCandidate, downloadResume } from "../controllers/candidate.controller";
 import { getInterviewers, getPositions, getDepartments, createUser, createPosition } from "../controllers/admin.controller";
 import { VALID_DECISIONS } from "../service/interview.service";
@@ -118,6 +121,21 @@ router.post(
     validate,
     createInterview
 );
+
+router.put(
+    "/interviews/:id",
+    authenticate,
+    authorize("admin"),
+    updateInterview
+);
+
+router.delete(
+    "/interviews/:id",
+    authenticate,
+    authorize("admin"),
+    deleteInterview
+);
+
 
 router.get(
     "/interviews/:id/rounds",
