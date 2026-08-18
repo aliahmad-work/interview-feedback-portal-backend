@@ -199,3 +199,55 @@ export async function updateRoundDecision(req: Request, res: Response) {
         return res.status(status).json({ message });
     }
 }
+
+export async function updateInterview(req: Request, res: Response) {
+    try {
+        const { id } = req.params;
+        const { candidateId, positionId, interviewerIds, date, startTime, endTime, round, type, status, rounds } = req.body;
+
+        const updateData: any = {};
+        if (candidateId) updateData.candidateId = candidateId;
+        if (positionId) updateData.positionId = positionId;
+        if (interviewerIds) updateData.interviewerIds = interviewerIds;
+        if (date) updateData.date = date;
+        if (startTime) updateData.startTime = new Date(startTime);
+        if (endTime) updateData.endTime = new Date(endTime);
+        if (round !== undefined) updateData.round = Number(round);
+        if (type !== undefined) updateData.type = type;
+        if (status) updateData.status = status;
+
+        if (rounds && rounds.length > 0) {
+            updateData.rounds = rounds.map((r: any) => ({
+                interviewerIds: r.interviewerIds,
+                type: r.type,
+                duration: Number(r.duration),
+                date: r.date || undefined,
+                startTime: r.startTime ? new Date(r.startTime) : undefined,
+                endTime: r.endTime ? new Date(r.endTime) : undefined
+            }));
+        }
+
+        const interview = await interviewServices.updateInterview(id as string, updateData);
+
+        return res.json({ interview });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
+export async function deleteInterview(req: Request, res: Response) {
+    try {
+        const { id } = req.params;
+
+        const result = await interviewServices.deleteInterview(id as string);
+
+        return res.json(result);
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+

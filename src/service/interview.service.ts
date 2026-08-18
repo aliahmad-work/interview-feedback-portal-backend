@@ -826,3 +826,212 @@ export async function getCandidateDetails(candidateId: string) {
 
     return candidate;
 }
+
+export async function getInterviewByIdForAdmin(id: string) {
+    if (!isValidObjectId(id)) {
+        throw { status: 400, message: "Invalid interview id" };
+    }
+    const interview = await prisma.interview.findUnique({
+        where: { id },
+        include: {
+            candidate: {
+                select: {
+                    id: true,
+                    candidateCode: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true,
+                    phone: true,
+                    experience: true,
+                    currentCompany: true,
+                    currentPosition: true,
+                    skills: true
+                }
+            },
+            position: {
+                select: {
+                    id: true,
+                    title: true,
+                    requiredSkills: true,
+                    minimumExperience: true,
+                    maximumExperience: true,
+                    description: true,
+                    status: true
+                }
+            },
+            creator: {
+                select: {
+                    id: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true
+                }
+            },
+            interviewers: {
+                select: {
+                    id: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true,
+                    designation: true
+                }
+            },
+            rounds: {
+                include: {
+                    interviewers: {
+                        select: {
+                            id: true,
+                            firstname: true,
+                            lastname: true,
+                            email: true,
+                            designation: true
+                        }
+                    }
+                },
+                orderBy: { roundNumber: "asc" as const }
+            },
+            interviewFeedbacks: {
+                select: feedbackSelect,
+                orderBy: {
+                    submittedAt: 'asc' as const
+                }
+            }
+        }
+    });
+
+    return interview;
+}
+
+export async function updateInterview(id: string, data: {
+    candidateId?: string;
+    positionId?: string;
+    interviewerIds?: string[];
+    date?: string;
+    startTime?: Date;
+    endTime?: Date;
+    round?: number;
+    type?: string;
+    status?: string;
+    rounds?: CreateRoundData[];
+}) {
+    if (!isValidObjectId(id)) {
+        throw { status: 400, message: "Invalid interview id" };
+    }
+
+    const existingInterview = await prisma.interview.findUnique({
+        where: { id },
+        include: { rounds: true }
+    });
+
+    if (!existingInterview) {
+        throw { status: 404, message: "Interview not found" };
+    }
+
+    if (data.candidateId) {
+        if (!isValidObjectId(data.candidateId)) {
+            throw { status: 400, message: "Invalid candidate id" };
+        }
+        const candidate = await prisma.candidate.findUnique({ where: { id: data.candidateId } });
+        if (!candidate) {
+            throw { status: 404, message: "Candidate not found" };
+        }
+    }
+
+    if (data.positionId) {
+        if (!isValidObjectId(data.positionId)) {
+            throw { status: 400, message: "Invalid position id" };
+        }
+        const position = await prisma.jobPositions.findUnique({ where: { id: data.positionId } });
+        if (!position) {
+            throw { status: 404, message: "Job position not found" };
+        }
+    }
+
+    if (data.rounds && data.rounds.length > 0) {
+        await prisma.interviewRound.deleteMany({ where: { interviewId: id } });
+        await createInterviewRounds(id, data.rounds);
+
+        const allInterviewerIds = [...new Set(data.rounds.flatMap(r => r.interviewerIds))];
+        const round1 = data.rounds[0];
+
+        await prisma.interview.update({
+            where: { id },
+            data: {
+                ...(data.candidateId && { candidateId: data.candidateId }),
+                ...(data.positionId && { positionId: data.positionId }),
+                ...(data.type && { type: data.type }),
+                ...(data.status && { status: data.status }),
+                ...(round1.date && { date: round1.date }),
+                ...(round1.startTime && { startTime: round1.startTime }),
+                ...(round1.endTime && { endTime: round1.endTime }),
+                interviewerIds: allInterviewerIds
+            }
+        });
+    } else {
+        const updateData: any = {};
+        if (data.candidateId) updateData.candidateId = data.candidateId;
+        if (data.positionId) updateData.positionId = data.positionId;
+        if (data.interviewerIds) {
+            for (const invId of data.interviewerIds) {
+                if (!isValidObjectId(invId)) {
+                    throw { status: 400, message: "Invalid interviewer id" };
+                }
+            }
+            updateData.interviewerIds = data.interviewerIds;
+        }
+        if (data.date) updateData.date = data.date;
+        if (data.startTime) updateData.startTime = data.startTime;
+        if (data.endTime) updateData.endTime = data.endTime;
+        if (data.round !== undefined) updateData.round = data.round;
+        if (data.type !== undefined) updateData.type = data.type;
+        if (data.status) updateData.status = data.status;
+
+        if (updateData.startTime && updateData.endTime && updateData.startTime >= updateData.endTime) {
+            throw { status: 400, message: "End time must be after start time" };
+        }
+
+        await prisma.interview.update({
+            where: { id },
+            data: updateData
+        });
+
+        if (existingInterview.rounds.length > 0) {
+            const firstRound = existingInterview.rounds[0];
+            await prisma.interviewRound.update({
+                where: { id: firstRound.id },
+                data: {
+                    ...(data.interviewerIds && { interviewerIds: data.interviewerIds }),
+                    ...(data.type && { type: data.type }),
+                    ...(data.date && { date: data.date }),
+                    ...(data.startTime && { startTime: data.startTime }),
+                    ...(data.endTime && { endTime: data.endTime })
+                }
+            });
+        }
+    }
+
+    return getInterviewByIdForAdmin(id);
+}
+
+export async function deleteInterview(id: string) {
+    if (!isValidObjectId(id)) {
+        throw { status: 400, message: "Invalid interview id" };
+    }
+
+    const existing = await prisma.interview.findUnique({
+        where: { id }
+    });
+
+    if (!existing) {
+        throw { status: 404, message: "Interview not found" };
+    }
+
+    await prisma.$transaction([
+        prisma.interviewFeedback.deleteMany({ where: { interviewId: id } }),
+        prisma.interviewRound.deleteMany({ where: { interviewId: id } }),
+        prisma.interview.delete({ where: { id } })
+    ]);
+
+    return { message: "Interview deleted successfully" };
+}
+
