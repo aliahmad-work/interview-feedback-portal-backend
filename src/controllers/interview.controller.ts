@@ -107,6 +107,21 @@ export async function updateDecision(req: Request, res: Response) {
     }
 }
 
+export async function resumeInterview(req: Request, res: Response) {
+    try {
+        const user = (req as any).user;
+        const { id } = req.params;
+
+        const updated = await interviewRoundServices.resumeInterview(id as string, user.id);
+
+        return res.json({ interview: updated });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
 export async function getInterviewRounds(req: Request, res: Response) {
     try {
         const { id } = req.params;

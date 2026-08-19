@@ -124,9 +124,18 @@ export async function submitFeedback(data: SubmitFeedbackData) {
           data: { status: "completed" }
         });
 
+        const remainingActiveRounds = await tx.interviewRound.count({
+          where: {
+            interviewId: data.interviewId,
+            status: { in: ["pending", "scheduled", "in-progress"] }
+          }
+        });
+
         await tx.interview.update({
           where: { id: data.interviewId },
-          data: { decision: "pending" }
+          data: remainingActiveRounds === 0
+            ? { status: "completed", decision: "pending" }
+            : { decision: "pending" }
         });
       }
 
