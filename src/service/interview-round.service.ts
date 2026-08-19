@@ -354,6 +354,19 @@ export async function updateRoundDecision(
         throw { status: 400, message: "Cannot make a decision on a round that is not yet active" };
     }
 
+    if (decision === "hired") {
+        const remainingRounds = await prisma.interviewRound.count({
+            where: {
+                interviewId,
+                roundNumber: { gt: round.roundNumber },
+                status: { not: "cancelled" }
+            }
+        });
+        if (remainingRounds > 0) {
+            throw { status: 400, message: "Cannot hire until all remaining rounds are completed" };
+        }
+    }
+
     const nextRound = await prisma.interviewRound.findFirst({
         where: {
             interviewId,
@@ -431,6 +444,7 @@ export async function updateRoundDecision(
                 where: { id: interviewId },
                 data: {
                     decision,
+                    status: "completed",
                     decisionUpdatedAt: new Date(),
                     decisionUpdatedBy: adminId
                 }
@@ -486,4 +500,155 @@ export async function isRoundVisibleToInterviewers(interviewId: string, roundNum
 
     // Round is visible if previous round has "next_round" decision
     return previousRound.decision === "next_round";
+}
+
+export async function resumeInterview(interviewId: string, adminId: string) {
+    if (!isValidObjectId(interviewId)) {
+        throw { status: 400, message: "Invalid interview id" };
+    }
+
+    const interview = await prisma.interview.findUnique({
+        where: { id: interviewId },
+        include: {
+            rounds: { orderBy: { roundNumber: "asc" } }
+        }
+    });
+    if (!interview) {
+        throw { status: 404, message: "Interview not found" };
+    }
+
+    if (interview.decision !== "hold") {
+        throw { status: 400, message: "Interview is not on hold" };
+    }
+
+    if (!interview.rounds || interview.rounds.length === 0) {
+        throw { status: 400, message: "Interview has no rounds" };
+    }
+
+    const heldRound = interview.rounds.find(r => r.decision === "hold");
+    if (!heldRound) {
+        throw { status: 400, message: "No held round found" };
+    }
+
+    const nextRound = interview.rounds.find(r => r.roundNumber === heldRound.roundNumber + 1);
+
+    await prisma.$transaction(async (tx) => {
+        await tx.interviewRound.update({
+            where: { id: heldRound.id },
+            data: {
+                decision: "next_round",
+                decisionUpdatedAt: new Date(),
+                decisionUpdatedBy: adminId
+            }
+        });
+
+        if (nextRound) {
+            const nextStatus = nextRound.date && nextRound.startTime && nextRound.endTime
+                ? "scheduled"
+                : "pending";
+            await tx.interviewRound.update({
+                where: { id: nextRound.id },
+                data: { status: nextStatus }
+            });
+        }
+
+        await tx.interview.update({
+            where: { id: interviewId },
+            data: {
+                decision: "next_round",
+                status: "scheduled",
+                decisionUpdatedAt: new Date(),
+                decisionUpdatedBy: adminId
+            }
+        });
+    });
+
+    return prisma.interview.findUnique({
+        where: { id: interviewId },
+        include: {
+            candidate: {
+                select: {
+                    id: true,
+                    candidateCode: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true,
+                    phone: true,
+                    experience: true,
+                    currentCompany: true,
+                    currentPosition: true,
+                    skills: true
+                }
+            },
+            position: {
+                select: {
+                    id: true,
+                    title: true,
+                    requiredSkills: true,
+                    minimumExperience: true,
+                    maximumExperience: true,
+                    description: true,
+                    status: true
+                }
+            },
+            creator: {
+                select: {
+                    id: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true
+                }
+            },
+            interviewers: {
+                select: {
+                    id: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true,
+                    designation: true
+                }
+            },
+            rounds: {
+                include: {
+                    interviewers: {
+                        select: {
+                            id: true,
+                            firstname: true,
+                            lastname: true,
+                            email: true,
+                            designation: true
+                        }
+                    }
+                },
+                orderBy: { roundNumber: "asc" }
+            },
+            interviewFeedbacks: {
+                select: {
+                    id: true,
+                    interviewId: true,
+                    roundId: true,
+                    candidateId: true,
+                    interviewerId: true,
+                    interviewer: {
+                        select: {
+                            id: true,
+                            firstname: true,
+                            lastname: true,
+                            email: true,
+                            designation: true
+                        }
+                    },
+                    rating: true,
+                    recommendation: true,
+                    positiveComments: true,
+                    negativeComments: true,
+                    additionalComments: true,
+                    submittedAt: true
+                },
+                orderBy: {
+                    submittedAt: 'asc' as const
+                }
+            }
+        }
+    });
 }

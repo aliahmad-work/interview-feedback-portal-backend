@@ -1,5 +1,5 @@
 import prisma from "../lib/prisma";
-import { CreateRoundData, createInterviewRounds, getCurrentRound, updateRoundDecision, VALID_DECISIONS, isRoundVisibleToInterviewers } from "./interview-round.service";
+import { CreateRoundData, createInterviewRounds, getCurrentRound, updateRoundDecision, resumeInterview, VALID_DECISIONS, isRoundVisibleToInterviewers } from "./interview-round.service";
 
 export { VALID_DECISIONS };
 
@@ -481,6 +481,12 @@ export async function updateInterviewDecision(interviewId: string, decision: str
                         }
                     },
                     orderBy: { roundNumber: "asc" }
+                },
+                interviewFeedbacks: {
+                    select: feedbackSelect,
+                    orderBy: {
+                        submittedAt: 'asc' as const
+                    }
                 }
             }
         });
@@ -494,6 +500,48 @@ export async function updateInterviewDecision(interviewId: string, decision: str
             decisionUpdatedBy: adminId
         },
         include: {
+            candidate: {
+                select: {
+                    id: true,
+                    candidateCode: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true,
+                    phone: true,
+                    experience: true,
+                    currentCompany: true,
+                    currentPosition: true,
+                    skills: true
+                }
+            },
+            position: {
+                select: {
+                    id: true,
+                    title: true,
+                    requiredSkills: true,
+                    minimumExperience: true,
+                    maximumExperience: true,
+                    description: true,
+                    status: true
+                }
+            },
+            creator: {
+                select: {
+                    id: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true
+                }
+            },
+            interviewers: {
+                select: {
+                    id: true,
+                    firstname: true,
+                    lastname: true,
+                    email: true,
+                    designation: true
+                }
+            },
             rounds: {
                 include: {
                     interviewers: {
@@ -507,6 +555,12 @@ export async function updateInterviewDecision(interviewId: string, decision: str
                     }
                 },
                 orderBy: { roundNumber: "asc" }
+            },
+            interviewFeedbacks: {
+                select: feedbackSelect,
+                orderBy: {
+                    submittedAt: 'asc' as const
+                }
             }
         }
     });
@@ -582,6 +636,12 @@ export async function getInterviewerInterviews(interviewerId: string) {
                     }
                 },
                 orderBy: { roundNumber: "asc" }
+            },
+            interviewFeedbacks: {
+                select: feedbackSelect,
+                orderBy: {
+                    submittedAt: 'asc' as const
+                }
             }
         },
         orderBy: {

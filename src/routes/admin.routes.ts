@@ -10,6 +10,7 @@ import {
     updateInterview,
     deleteInterview,
     updateDecision,
+    resumeInterview,
     getInterviewRounds,
     addInterviewRounds,
     updateRoundSchedule,
@@ -108,6 +109,13 @@ router.patch(
     ],
     validate,
     updateDecision
+);
+
+router.patch(
+    "/interviews/:id/resume",
+    authenticate,
+    authorize("admin"),
+    resumeInterview
 );
 
 router.post(
