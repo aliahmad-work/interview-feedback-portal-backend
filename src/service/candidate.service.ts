@@ -285,17 +285,67 @@ export async function deleteCandidate(id: string) {
         throw { status: 404, message: "Candidate not found" };
     }
 
-    const interviewCount = await prisma.interview.count({ where: { candidateId: id } });
-    if (interviewCount > 0) {
-        throw { status: 409, message: "Cannot delete candidate with associated interviews" };
+    const interviews = await prisma.interview.findMany({
+        where: { candidateId: id },
+        include: {
+            rounds: true
+        }
+    });
+
+    const now = new Date();
+    let hasActiveOrScheduledInterviews = false;
+
+    for (const interview of interviews) {
+        if (interview.decision === "pending") {
+            hasActiveOrScheduledInterviews = true;
+            break;
+        }
+
+        if (interview.status === "scheduled" || interview.status === "in-progress") {
+            hasActiveOrScheduledInterviews = true;
+            break;
+        }
+
+        if (interview.startTime && new Date(interview.startTime) > now) {
+            hasActiveOrScheduledInterviews = true;
+            break;
+        }
+
+        if (interview.rounds && interview.rounds.length > 0) {
+            for (const round of interview.rounds) {
+                if (round.status === "cancelled") continue;
+
+                if (round.status === "scheduled" || round.status === "in-progress" || round.status === "pending") {
+                    hasActiveOrScheduledInterviews = true;
+                    break;
+                }
+
+                if (round.decision === "pending") {
+                    hasActiveOrScheduledInterviews = true;
+                    break;
+                }
+
+                if (round.startTime && new Date(round.startTime) > now) {
+                    hasActiveOrScheduledInterviews = true;
+                    break;
+                }
+            }
+            if (hasActiveOrScheduledInterviews) break;
+        }
     }
 
-    const feedbackCount = await prisma.interviewFeedback.count({ where: { candidateId: id } });
-    if (feedbackCount > 0) {
-        throw { status: 409, message: "Cannot delete candidate with associated feedback" };
+    if (hasActiveOrScheduledInterviews) {
+        throw { status: 409, message: "Cannot delete candidate with active, scheduled, or ongoing interviews" };
     }
 
-    await prisma.candidate.delete({ where: { id } });
+    const interviewIds = interviews.map(i => i.id);
+
+    await prisma.$transaction([
+        prisma.interviewFeedback.deleteMany({ where: { candidateId: id } }),
+        prisma.interviewRound.deleteMany({ where: { interviewId: { in: interviewIds } } }),
+        prisma.interview.deleteMany({ where: { candidateId: id } }),
+        prisma.candidate.delete({ where: { id } })
+    ]);
 
     return { message: "Candidate deleted successfully" };
 }
