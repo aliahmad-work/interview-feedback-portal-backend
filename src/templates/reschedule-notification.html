@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;padding:40px 20px;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                    <tr>
+                        <td style="background-color:#d97706;padding:30px 40px;text-align:center;">
+                            <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:600;">Interview Rescheduled</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:40px;">
+                            <h2 style="color:#1f2937;margin:0 0 20px;font-size:20px;">Hello {{recipientName}},</h2>
+                            <p style="color:#4b5563;line-height:1.6;margin:0 0 20px;">
+                                The interview with <strong>{{candidateName}}</strong> for <strong>{{positionName}}</strong> (Round {{roundNumber}}) has been rescheduled.
+                            </p>
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 25px;">
+                                <tr>
+                                    <td style="padding:15px;background-color:#fef2f2;border:1px solid #fecaca;border-radius:6px;">
+                                        <p style="color:#991b1b;margin:0 0 8px;font-size:13px;font-weight:600;text-transform:uppercase;">Previous Schedule</p>
+                                        <p style="color:#1f2937;margin:0;font-size:14px;">{{oldDate}} at {{oldTime}}</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="height:10px;"></td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:15px;background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;">
+                                        <p style="color:#166534;margin:0 0 8px;font-size:13px;font-weight:600;text-transform:uppercase;">New Schedule</p>
+                                        <p style="color:#1f2937;margin:0;font-size:14px;">{{newDate}} at {{newTime}}</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="color:#6b7280;line-height:1.6;margin:0;font-size:14px;">
+                                Please update your calendar accordingly. If you have any questions, please contact the admin.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background-color:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;">
+                            <p style="color:#9ca3af;margin:0;font-size:12px;text-align:center;">
+                                This is an automated email from the Interview Portal. Please do not reply directly to this message.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

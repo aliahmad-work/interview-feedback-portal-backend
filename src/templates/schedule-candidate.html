@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;padding:40px 20px;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                    <tr>
+                        <td style="background-color:#4f46e5;padding:30px 40px;text-align:center;">
+                            <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:600;">Interview Portal</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:40px;">
+                            <h2 style="color:#1f2937;margin:0 0 20px;font-size:20px;">Hello {{candidateName}},</h2>
+                            <p style="color:#4b5563;line-height:1.6;margin:0 0 15px;">
+                                You have been invited to schedule an interview for the position of <strong>{{positionName}}</strong>.
+                            </p>
+                            <p style="color:#4b5563;line-height:1.6;margin:0 0 15px;">
+                                This is <strong>Round {{roundNumber}}</strong> of the interview process.
+                                Please select a date and time that works best for you from the available slots.
+                            </p>
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin:30px 0;">
+                                <tr>
+                                    <td align="center">
+                                        <a href="{{schedulingUrl}}" style="display:inline-block;background-color:#4f46e5;color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:6px;font-size:16px;font-weight:600;">
+                                            Select Time Slot
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="color:#6b7280;line-height:1.6;margin:0 0 10px;font-size:14px;">
+                                Please complete scheduling within <strong>48 hours</strong> to keep the process moving.
+                            </p>
+                            <p style="color:#6b7280;line-height:1.6;margin:0;font-size:14px;">
+                                If you have any questions, please reach out to the hiring team.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background-color:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;">
+                            <p style="color:#9ca3af;margin:0;font-size:12px;text-align:center;">
+                                This is an automated email from the Interview Portal. Please do not reply directly to this message.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

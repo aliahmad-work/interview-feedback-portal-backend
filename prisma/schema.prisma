@@ -94,55 +94,62 @@ model JobPositions {
 }
 
 model Interview {
-  id                String        @id @default(auto()) @map("_id") @db.ObjectId
-  round             Int
-  type              String?
-  date              String
-  startTime         DateTime
-  endTime           DateTime
-  status            String        @default("scheduled")
-  decision          String        @default("pending")
-  decisionUpdatedAt DateTime?
-  decisionUpdatedBy String?       @db.ObjectId
-  candidateId       String        @db.ObjectId
-  candidate         Candidate     @relation(fields: [candidateId], references: [id])
-  positionId        String        @db.ObjectId
-  position          JobPositions  @relation(fields: [positionId], references: [id])
-  createdBy         String        @db.ObjectId
-  creator           User          @relation("InterviewCreator", fields: [createdBy], references: [id])
-  interviewerIds    String[]      @db.ObjectId
-  interviewers      User[]        @relation("InterviewInterviewers", fields: [interviewerIds], references: [id])
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  rounds            InterviewRound[]
-  interviewFeedbacks InterviewFeedback[]
+  id                   String        @id @default(auto()) @map("_id") @db.ObjectId
+  round                Int
+  type                 String?
+  date                 String?
+  startTime            DateTime?
+  endTime              DateTime?
+  status               String        @default("scheduled")
+  decision             String        @default("pending")
+  decisionUpdatedAt    DateTime?
+  decisionUpdatedBy    String?       @db.ObjectId
+  candidateId          String        @db.ObjectId
+  candidate            Candidate     @relation(fields: [candidateId], references: [id])
+  positionId           String        @db.ObjectId
+  position             JobPositions  @relation(fields: [positionId], references: [id])
+  createdBy            String        @db.ObjectId
+  creator              User          @relation("InterviewCreator", fields: [createdBy], references: [id])
+  interviewerIds       String[]      @db.ObjectId
+  interviewers         User[]        @relation("InterviewInterviewers", fields: [interviewerIds], references: [id])
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  calendlyEventUri     String?
+  calendlySchedulingUrl String?
+  lastSyncedAt         DateTime?
+  rounds               InterviewRound[]
+  interviewFeedbacks   InterviewFeedback[]
 
   @@index([candidateId])
   @@index([positionId])
   @@index([createdBy])
+  @@index([calendlyEventUri])
 }
 
 model InterviewRound {
-  id              String         @id @default(auto()) @map("_id") @db.ObjectId
-  interviewId     String         @db.ObjectId
-  interview       Interview      @relation(fields: [interviewId], references: [id])
-  roundNumber     Int
-  type            String?
-  duration        Int
-  date            String?
-  startTime       DateTime?
-  endTime         DateTime?
-  status          String         @default("pending")
-  decision        String         @default("pending")
-  decisionUpdatedAt DateTime?
-  decisionUpdatedBy String?      @db.ObjectId
-  interviewerIds  String[]       @db.ObjectId
-  interviewers    User[]         @relation("RoundInterviewers", fields: [interviewerIds], references: [id])
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id                 String         @id @default(auto()) @map("_id") @db.ObjectId
+  interviewId        String         @db.ObjectId
+  interview          Interview      @relation(fields: [interviewId], references: [id])
+  roundNumber        Int
+  type               String?
+  duration           Int
+  date               String?
+  startTime          DateTime?
+  endTime            DateTime?
+  status             String         @default("pending")
+  decision           String         @default("pending")
+  decisionUpdatedAt  DateTime?
+  decisionUpdatedBy  String?        @db.ObjectId
+  interviewerIds     String[]       @db.ObjectId
+  interviewers       User[]         @relation("RoundInterviewers", fields: [interviewerIds], references: [id])
+  calendlyEventUri   String?
+  lastSyncedAt       DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
   interviewFeedbacks InterviewFeedback[]
 
   @@index([interviewId])
+  @@index([calendlyEventUri])
 }
 
 model InterviewFeedback {

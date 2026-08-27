@@ -18,6 +18,7 @@ import {
     updateRoundDecision
 } from "../controllers/interview.controller";
 
+import { calendlyController } from "../controllers/calendly.controller";
 import { getCandidates, getCandidateById, createCandidate, updateCandidate, deleteCandidate, downloadResume } from "../controllers/candidate.controller";
 import { getInterviewers, getPositions, getDepartments, createUser, createPosition } from "../controllers/admin.controller";
 import { VALID_DECISIONS } from "../service/interview.service";
@@ -247,6 +248,39 @@ router.get(
     authenticate,
     authorize("admin"),
     getPositions
+);
+
+// Calendly Integration Routes
+router.post(
+    "/calendly/sync",
+    authenticate,
+    authorize("admin"),
+    calendlyController.syncEvents
+);
+
+router.get(
+    "/calendly/event-types",
+    authenticate,
+    authorize("admin"),
+    calendlyController.getEventTypes
+);
+
+router.get(
+    "/calendly/status",
+    authenticate,
+    authorize("admin"),
+    calendlyController.getSyncStatus
+);
+
+router.post(
+    "/email/test",
+    authenticate,
+    authorize("admin"),
+    [
+        body("email").isEmail().withMessage("A valid email is required"),
+    ],
+    validate,
+    calendlyController.testEmail
 );
 
 export default router;

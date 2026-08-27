@@ -1,9 +1,43 @@
 import prisma from "../lib/prisma";
 import { CreateRoundData, createInterviewRounds, getCurrentRound, updateRoundDecision, resumeInterview, VALID_DECISIONS, isRoundVisibleToInterviewers } from "./interview-round.service";
+import { calendlyService } from "./calendly.service";
+import { emailService } from "./email.service";
 
 export { VALID_DECISIONS };
 
 const isValidObjectId = (id: string) => /^[a-f\d]{24}$/i.test(id);
+
+async function sendSchedulingEmailToInterviewer(interviewId: string) {
+    try {
+        const interview = await prisma.interview.findUnique({
+            where: { id: interviewId },
+            include: {
+                candidate: true,
+                position: true,
+                interviewers: true,
+                rounds: { orderBy: { roundNumber: "asc" } },
+            },
+        });
+        if (!interview) return;
+
+        const pendingRound = interview.rounds.find(
+            (r) => r.status === "pending" || r.status === "pending_schedule" || (!r.date && !r.startTime)
+        );
+        if (!pendingRound) return;
+
+        const schedulingUrl = await calendlyService.getSchedulingUrl();
+
+        await emailService.sendScheduleToCandidate({
+            candidateEmail: interview.candidate.email,
+            candidateName: `${interview.candidate.firstname} ${interview.candidate.lastname}`,
+            positionName: interview.position.title,
+            roundNumber: pendingRound.roundNumber,
+            schedulingUrl,
+        });
+    } catch (error) {
+        console.error("[Email] Failed to send scheduling email:", error);
+    }
+}
 
 export async function createInterview(data: {
     candidateId: string;
@@ -17,6 +51,8 @@ export async function createInterview(data: {
     type?: string;
     status?: string;
     rounds?: CreateRoundData[];
+    schedulingMode?: boolean;
+    duration?: number;
 }) {
     if (!isValidObjectId(data.candidateId)) {
         throw { status: 400, message: "Invalid candidate id" };
@@ -33,6 +69,107 @@ export async function createInterview(data: {
     const position = await prisma.jobPositions.findUnique({ where: { id: data.positionId } });
     if (!position) {
         throw { status: 404, message: "Job position not found" };
+    }
+
+    // Scheduling mode: no date/time required, candidate will pick via Calendly
+    if (data.schedulingMode) {
+        const interviewerIds = data.interviewerIds || (data.rounds && data.rounds[0] ? data.rounds[0].interviewerIds : []);
+        if (!interviewerIds || interviewerIds.length === 0) {
+            throw { status: 400, message: "At least one interviewer is required" };
+        }
+        for (const id of interviewerIds) {
+            if (!isValidObjectId(id)) {
+                throw { status: 400, message: "Invalid interviewer id" };
+            }
+        }
+
+        const interviewers = await prisma.user.findMany({
+            where: {
+                id: { in: interviewerIds },
+                role: { name: "interviewer" }
+            },
+            select: { id: true }
+        });
+        if (interviewers.length !== interviewerIds.length) {
+            throw { status: 400, message: "One or more assigned users are not valid interviewers" };
+        }
+
+        const existingCount = await prisma.interview.count({
+            where: { candidateId: data.candidateId }
+        });
+
+        const duration = data.duration || 60;
+
+        const schedulingUrl = await calendlyService.getSchedulingUrl();
+
+        const interview = await prisma.interview.create({
+            data: {
+                round: existingCount + 1,
+                type: data.type || null,
+                date: null,
+                startTime: null,
+                endTime: null,
+                status: "pending_schedule",
+                candidateId: data.candidateId,
+                positionId: data.positionId,
+                createdBy: data.createdBy,
+                interviewerIds: interviewerIds,
+                calendlySchedulingUrl: schedulingUrl,
+            },
+            include: {
+                candidate: true,
+                position: true,
+                creator: true,
+                interviewers: true,
+                rounds: true,
+            },
+        });
+
+        // Create first round in pending_schedule status
+        const round = await prisma.interviewRound.create({
+            data: {
+                interviewId: interview.id,
+                roundNumber: 1,
+                type: data.type || null,
+                duration,
+                date: null,
+                startTime: null,
+                endTime: null,
+                status: "pending_schedule",
+                decision: "pending",
+                interviewerIds: interviewerIds,
+            },
+            include: {
+                interviewers: {
+                    select: {
+                        id: true,
+                        firstname: true,
+                        lastname: true,
+                        email: true,
+                        designation: true,
+                    },
+                },
+            },
+        });
+
+        // Send scheduling email to candidate
+        try {
+            await emailService.sendScheduleToCandidate({
+                candidateEmail: candidate.email,
+                candidateName: `${candidate.firstname} ${candidate.lastname}`,
+                positionName: position.title,
+                roundNumber: 1,
+                schedulingUrl,
+            });
+        } catch (emailError: any) {
+            console.error("[Email] FAILED to send scheduling email to candidate:", candidate.email);
+            console.error("[Email] Error:", emailError.message || emailError);
+        }
+
+        return {
+            ...interview,
+            rounds: [round],
+        };
     }
 
     const hasRounds = data.rounds && data.rounds.length > 0;
@@ -115,8 +252,9 @@ async function createDirectInterview(data: {
         const conflict = await prisma.interview.findFirst({
             where: {
                 interviewerIds: { has: interviewerId },
-                startTime: { lt: data.endTime! },
-                endTime: { gt: data.startTime! }
+                status: { not: "pending_schedule" },
+                startTime: { not: null, lt: data.endTime! },
+                endTime: { not: null, gt: data.startTime! }
             },
             select: { id: true, startTime: true, endTime: true }
         });
@@ -124,7 +262,7 @@ async function createDirectInterview(data: {
         if (conflict) {
             throw {
                 status: 409,
-                message: `Interviewer has a conflicting interview (${conflict.startTime.toISOString()} - ${conflict.endTime.toISOString()})`
+                message: `Interviewer has a conflicting interview (${conflict.startTime!.toISOString()} - ${conflict.endTime!.toISOString()})`
             };
         }
 
@@ -404,6 +542,9 @@ export async function updateInterviewDecision(interviewId: string, decision: str
     const interview = await prisma.interview.findUnique({
         where: { id: interviewId },
         include: {
+            candidate: true,
+            position: true,
+            interviewers: true,
             rounds: {
                 orderBy: { roundNumber: "asc" }
             }
@@ -422,6 +563,86 @@ export async function updateInterviewDecision(interviewId: string, decision: str
         }
 
         await updateRoundDecision(interviewId, currentRound.id, decision, adminId);
+
+        // Handle next_round: create next round and trigger Calendly scheduling
+        if (decision === "next_round") {
+            const nextRoundNumber = currentRound.roundNumber + 1;
+            const existingNextRound = interview.rounds.find(
+                (r) => r.roundNumber === nextRoundNumber
+            );
+
+            if (!existingNextRound) {
+                // Create the next round reusing current round's config
+                const schedulingUrl = await calendlyService.getSchedulingUrl();
+
+                const newRound = await prisma.interviewRound.create({
+                    data: {
+                        interviewId,
+                        roundNumber: nextRoundNumber,
+                        type: currentRound.type,
+                        duration: currentRound.duration,
+                        date: null,
+                        startTime: null,
+                        endTime: null,
+                        status: "pending_schedule",
+                        decision: "pending",
+                        interviewerIds: currentRound.interviewerIds,
+                    },
+                });
+
+                // Update interview status
+                await prisma.interview.update({
+                    where: { id: interviewId },
+                    data: {
+                        status: "pending_schedule",
+                        calendlySchedulingUrl: schedulingUrl,
+                    },
+                });
+
+                // Send scheduling email to candidate
+                try {
+                    await emailService.sendScheduleToCandidate({
+                        candidateEmail: interview.candidate.email,
+                        candidateName: `${interview.candidate.firstname} ${interview.candidate.lastname}`,
+                        positionName: interview.position.title,
+                        roundNumber: nextRoundNumber,
+                        schedulingUrl,
+                    });
+                } catch (emailError: any) {
+                    console.error("[Email] FAILED to send scheduling email for next round:", emailError.message || emailError);
+                }
+            } else {
+                // Next round exists but has no date/time - trigger scheduling
+                if (!existingNextRound.date || !existingNextRound.startTime) {
+                    const schedulingUrl = await calendlyService.getSchedulingUrl();
+
+                    await prisma.interviewRound.update({
+                        where: { id: existingNextRound.id },
+                        data: { status: "pending_schedule" },
+                    });
+
+                    await prisma.interview.update({
+                        where: { id: interviewId },
+                        data: {
+                            status: "pending_schedule",
+                            calendlySchedulingUrl: schedulingUrl,
+                        },
+                    });
+
+                    try {
+                        await emailService.sendScheduleToCandidate({
+                            candidateEmail: interview.candidate.email,
+                            candidateName: `${interview.candidate.firstname} ${interview.candidate.lastname}`,
+                            positionName: interview.position.title,
+                            roundNumber: existingNextRound.roundNumber,
+                            schedulingUrl,
+                        });
+                    } catch (emailError: any) {
+                        console.error("[Email] FAILED to send scheduling email:", emailError.message || emailError);
+                    }
+                }
+            }
+        }
 
         return prisma.interview.findUnique({
             where: { id: interviewId },
@@ -575,7 +796,7 @@ export async function getInterviewerInterviews(interviewerId: string) {
                     rounds: {
                         some: {
                             interviewerIds: { has: interviewerId },
-                            status: { in: ["pending", "scheduled", "in-progress", "completed"] }
+                            status: { in: ["pending", "pending_schedule", "scheduled", "in-progress", "completed"] }
                         }
                     }
                 }
