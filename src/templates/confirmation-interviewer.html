@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;padding:40px 20px;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                    <tr>
+                        <td style="background-color:#059669;padding:30px 40px;text-align:center;">
+                            <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:600;">Interview Scheduled</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:40px;">
+                            <h2 style="color:#1f2937;margin:0 0 20px;font-size:20px;">Hello {{interviewerName}},</h2>
+                            <p style="color:#4b5563;line-height:1.6;margin:0 0 20px;">
+                                An interview has been scheduled with the following details:
+                            </p>
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;margin:0 0 25px;">
+                                <tr>
+                                    <td style="padding:20px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td style="padding:8px 0;color:#374151;font-size:14px;width:140px;font-weight:600;">Candidate:</td>
+                                                <td style="padding:8px 0;color:#1f2937;font-size:14px;">{{candidateName}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:8px 0;color:#374151;font-size:14px;font-weight:600;">Position:</td>
+                                                <td style="padding:8px 0;color:#1f2937;font-size:14px;">{{positionName}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:8px 0;color:#374151;font-size:14px;font-weight:600;">Round:</td>
+                                                <td style="padding:8px 0;color:#1f2937;font-size:14px;">{{roundNumber}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:8px 0;color:#374151;font-size:14px;font-weight:600;">Date:</td>
+                                                <td style="padding:8px 0;color:#1f2937;font-size:14px;">{{date}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:8px 0;color:#374151;font-size:14px;font-weight:600;">Time:</td>
+                                                <td style="padding:8px 0;color:#1f2937;font-size:14px;">{{time}} ({{duration}} min)</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="color:#6b7280;line-height:1.6;margin:0;font-size:14px;">
+                                Please ensure you are available at the scheduled time. If you need to reschedule, please contact the admin.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background-color:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;">
+                            <p style="color:#9ca3af;margin:0;font-size:12px;text-align:center;">
+                                This is an automated email from the Interview Portal. Please do not reply directly to this message.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

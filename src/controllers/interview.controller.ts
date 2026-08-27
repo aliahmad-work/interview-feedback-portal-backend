@@ -5,7 +5,7 @@ import * as interviewRoundServices from "../service/interview-round.service";
 export async function createInterview(req: Request, res: Response) {
     try {
         const user = (req as any).user;
-        const { candidateId, positionId, interviewerIds, date, startTime, endTime, round, type, status, rounds } = req.body;
+        const { candidateId, positionId, interviewerIds, date, startTime, endTime, round, type, status, rounds, schedulingMode, duration } = req.body;
 
         const interviewData: any = {
             candidateId,
@@ -13,7 +13,14 @@ export async function createInterview(req: Request, res: Response) {
             createdBy: user.id
         };
 
-        if (rounds && rounds.length > 0) {
+        if (schedulingMode) {
+            // Calendly scheduling mode: no date/time required
+            const resolvedInterviewerIds = interviewerIds || (rounds && rounds[0] ? rounds[0].interviewerIds : []);
+            interviewData.schedulingMode = true;
+            interviewData.interviewerIds = resolvedInterviewerIds;
+            interviewData.type = type || (rounds && rounds[0] ? rounds[0].type : undefined);
+            interviewData.duration = duration ? Number(duration) : (rounds && rounds[0] ? Number(rounds[0].duration) : 60);
+        } else if (rounds && rounds.length > 0) {
             interviewData.rounds = rounds.map((r: any) => ({
                 interviewerIds: r.interviewerIds,
                 type: r.type,
