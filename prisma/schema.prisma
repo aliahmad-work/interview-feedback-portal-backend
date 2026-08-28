@@ -143,6 +143,7 @@ model InterviewRound {
   interviewerIds     String[]       @db.ObjectId
   interviewers       User[]         @relation("RoundInterviewers", fields: [interviewerIds], references: [id])
   calendlyEventUri   String?
+  calendlyRescheduleUrl String?
   lastSyncedAt       DateTime?
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt

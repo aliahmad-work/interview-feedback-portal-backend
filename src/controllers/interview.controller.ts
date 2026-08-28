@@ -18,6 +18,11 @@ export async function createInterview(req: Request, res: Response) {
             const resolvedInterviewerIds = interviewerIds || (rounds && rounds[0] ? rounds[0].interviewerIds : []);
             interviewData.schedulingMode = true;
             interviewData.interviewerIds = resolvedInterviewerIds;
+            interviewData.rounds = rounds ? rounds.map((r: any) => ({
+                interviewerIds: r.interviewerIds,
+                type: r.type,
+                duration: Number(r.duration)
+            })) : [{ interviewerIds: resolvedInterviewerIds, type: type || 'Technical Assessment', duration: duration ? Number(duration) : 60 }];
             interviewData.type = type || (rounds && rounds[0] ? rounds[0].type : undefined);
             interviewData.duration = duration ? Number(duration) : (rounds && rounds[0] ? Number(rounds[0].duration) : 60);
         } else if (rounds && rounds.length > 0) {
