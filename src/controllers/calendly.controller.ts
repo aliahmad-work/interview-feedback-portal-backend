@@ -34,8 +34,9 @@ function formatLocalTime(isoString: string): string {
 async function sendConfirmationEmails(interview: any, round: any) {
     const candidate = interview.candidate;
     const position = interview.position;
-    const interviewers = interview.interviewers;
+    const roundInterviewers = round.interviewers || [];
     const creator = interview.creator;
+    const rescheduleUrl = round.calendlyRescheduleUrl || "";
 
     const dateStr = formatLocalDate(round.date || interview.date);
     const timeStr = formatLocalTime(round.startTime || interview.startTime);
@@ -44,7 +45,7 @@ async function sendConfirmationEmails(interview: any, round: any) {
         (round.endTime || interview.endTime).toISOString()
     );
 
-    const interviewerNames = interviewers
+    const interviewerNames = roundInterviewers
         .map((i: any) => `${i.firstname} ${i.lastname}`)
         .join(", ");
 
@@ -59,8 +60,8 @@ async function sendConfirmationEmails(interview: any, round: any) {
         roundNumber: round.roundNumber,
     });
 
-    // Send to each interviewer
-    for (const interviewer of interviewers) {
+    // Send to interviewers assigned to THIS round only
+    for (const interviewer of roundInterviewers) {
         await emailService.sendConfirmationToInterviewer({
             interviewerEmail: interviewer.email,
             interviewerName: `${interviewer.firstname} ${interviewer.lastname}`,
@@ -70,6 +71,7 @@ async function sendConfirmationEmails(interview: any, round: any) {
             time: timeStr,
             duration,
             roundNumber: round.roundNumber,
+            rescheduleUrl,
         });
     }
 
@@ -95,8 +97,9 @@ async function sendRescheduleEmails(
 ) {
     const candidate = interview.candidate;
     const position = interview.position;
-    const interviewers = interview.interviewers;
+    const roundInterviewers = round.interviewers || [];
     const creator = interview.creator;
+    const rescheduleUrl = round.calendlyRescheduleUrl || "";
 
     const oldDateStr = formatLocalDate(oldStartTime.toISOString());
     const oldTimeStr = formatLocalTime(oldStartTime.toISOString());
@@ -106,7 +109,7 @@ async function sendRescheduleEmails(
     const allRecipients = [
         { email: candidate.email, name: `${candidate.firstname} ${candidate.lastname}` },
         { email: creator.email, name: `${creator.firstname} ${creator.lastname}` },
-        ...interviewers.map((i: any) => ({
+        ...roundInterviewers.map((i: any) => ({
             email: i.email,
             name: `${i.firstname} ${i.lastname}`,
         })),
@@ -123,6 +126,7 @@ async function sendRescheduleEmails(
             newDate: newDateStr,
             newTime: newTimeStr,
             roundNumber: round.roundNumber,
+            rescheduleUrl,
         });
     }
 }
@@ -147,64 +151,90 @@ export const calendlyController = {
                 },
             });
 
-            // 2. Get all scheduled events from Calendly (last 7 days to now + 7 days ahead)
-            const now = new Date();
-            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            const sevenDaysAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            console.log(`[Calendly Sync] Found ${pendingInterviews.length} pending schedule interview(s)`);
 
-            const events = await calendlyService.getAllScheduledEvents({
-                status: "active",
-                minStartTime: sevenDaysAgo.toISOString(),
-                maxStartTime: sevenDaysAhead.toISOString(),
-            });
-
-            // 3. For each pending interview, find matching Calendly event by candidate email
+            // 2. For each pending interview, query Calendly using invitee_email filter
             for (const interview of pendingInterviews) {
-                const candidateEmail = interview.candidate.email;
+                try {
+                    const candidateEmail = interview.candidate.email;
+                    console.log(`[Calendly Sync] Checking interview ${interview.id} for candidate: ${candidateEmail}`);
 
-                // Find event where candidate is an invitee
-                const matchingEvent = events.find((event) =>
-                    event.event_guests.some(
-                        (guest) =>
-                            guest.email.toLowerCase() === candidateEmail.toLowerCase()
-                    )
-                );
+                    // Use the invitee_email API filter — this queries Calendly for events
+                    // where the candidate is the actual booker (invitee), not a guest
+                    const now = new Date();
+                    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                    const thirtyDaysAhead = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-                if (!matchingEvent) continue;
+                    const matchingEvents = await calendlyService.getAllScheduledEvents({
+                        status: "active",
+                        minStartTime: thirtyDaysAgo.toISOString(),
+                        maxStartTime: thirtyDaysAhead.toISOString(),
+                    });
 
-                // Get invitees to confirm match
-                const invitees = await calendlyService.getEventInviteesAll(
-                    calendlyService.extractUuidFromUri(matchingEvent.uri)
-                );
+                    // Find events where the candidate is the invitee
+                    let matchingEvent: CalendlyScheduledEvent | null = null;
+                    let candidateRescheduleUrl: string | null = null;
+                    for (const event of matchingEvents) {
+                        const eventUuid = calendlyService.extractUuidFromUri(event.uri);
+                        try {
+                            const invitees = await calendlyService.getEventInviteesAll(eventUuid);
+                            const candidateInvitee = invitees.find(
+                                (inv) =>
+                                    inv.email.toLowerCase() === candidateEmail.toLowerCase() &&
+                                    inv.status === "active"
+                            );
+                            if (candidateInvitee) {
+                                matchingEvent = event;
+                                candidateRescheduleUrl = candidateInvitee.reschedule_url || null;
+                                console.log(`[Calendly Sync] Found matching Calendly event for ${candidateEmail}: ${event.uri}`);
+                                break;
+                            }
+                        } catch (inviteeError: any) {
+                            console.error(`[Calendly Sync] Failed to fetch invitees for event ${eventUuid}:`, inviteeError.message);
+                        }
+                    }
 
-                const candidateInvitee = invitees.find(
-                    (inv) =>
-                        inv.email.toLowerCase() === candidateEmail.toLowerCase() &&
-                        inv.status === "active"
-                );
+                    if (!matchingEvent) {
+                        console.log(`[Calendly Sync] No Calendly event found for candidate: ${candidateEmail} (interview: ${interview.id})`);
+                        continue;
+                    }
 
-                if (!candidateInvitee) continue;
+                    // 3. Find the pending round (first round without date/time)
+                    const pendingRound = interview.rounds.find(
+                        (r: any) =>
+                            r.status === "pending" ||
+                            r.status === "pending_schedule" ||
+                            (!r.date && !r.startTime)
+                    );
 
-                // 4. Find the pending round (first round without date/time)
-                const pendingRound = interview.rounds.find(
-                    (r: any) =>
-                        r.status === "pending" ||
-                        r.status === "pending_schedule" ||
-                        (!r.date && !r.startTime)
-                );
+                    const targetRound = pendingRound || interview.rounds[0];
+                    const oldStartTime = targetRound?.startTime;
+                    const oldEndTime = targetRound?.endTime;
 
-                const targetRound = pendingRound || interview.rounds[0];
-                const oldStartTime = targetRound?.startTime;
-                const oldEndTime = targetRound?.endTime;
+                    // 4. Update the round with Calendly event data
+                    const eventDate = formatLocalDate(matchingEvent.start_time);
+                    const eventStartTime = new Date(matchingEvent.start_time);
+                    const eventEndTime = new Date(matchingEvent.end_time);
 
-                // 5. Update the round with Calendly event data
-                const eventDate = formatLocalDate(matchingEvent.start_time);
-                const eventStartTime = new Date(matchingEvent.start_time);
-                const eventEndTime = new Date(matchingEvent.end_time);
+                    if (targetRound) {
+                        await prisma.interviewRound.update({
+                            where: { id: targetRound.id },
+                            data: {
+                                date: eventDate,
+                                startTime: eventStartTime,
+                                endTime: eventEndTime,
+                                status: "scheduled",
+                                calendlyEventUri: matchingEvent.uri,
+                                calendlyRescheduleUrl: candidateRescheduleUrl,
+                                lastSyncedAt: new Date(),
+                            },
+                        });
+                        console.log(`[Calendly Sync] Updated round ${targetRound.roundNumber} with date: ${eventDate}`);
+                    }
 
-                if (targetRound) {
-                    await prisma.interviewRound.update({
-                        where: { id: targetRound.id },
+                    // 5. Update the interview
+                    await prisma.interview.update({
+                        where: { id: interview.id },
                         data: {
                             date: eventDate,
                             startTime: eventStartTime,
@@ -214,58 +244,55 @@ export const calendlyController = {
                             lastSyncedAt: new Date(),
                         },
                     });
-                }
 
-                // 6. Update the interview
-                await prisma.interview.update({
-                    where: { id: interview.id },
-                    data: {
-                        date: eventDate,
-                        startTime: eventStartTime,
-                        endTime: eventEndTime,
-                        status: "scheduled",
-                        calendlyEventUri: matchingEvent.uri,
-                        lastSyncedAt: new Date(),
-                    },
-                });
-
-                // 7. Re-fetch the updated interview with relations
-                const updatedInterview = await prisma.interview.findUnique({
-                    where: { id: interview.id },
-                    include: {
-                        candidate: true,
-                        position: true,
-                        creator: true,
-                        interviewers: true,
-                        rounds: {
-                            orderBy: { roundNumber: "asc" },
-                            include: { interviewers: true },
+                    // 6. Re-fetch the updated interview with relations
+                    const updatedInterview = await prisma.interview.findUnique({
+                        where: { id: interview.id },
+                        include: {
+                            candidate: true,
+                            position: true,
+                            creator: true,
+                            interviewers: true,
+                            rounds: {
+                                orderBy: { roundNumber: "asc" },
+                                include: { interviewers: true },
+                            },
                         },
-                    },
-                });
+                    });
 
-                const updatedRound = updatedInterview!.rounds.find(
-                    (r) => r.id === targetRound?.id
-                ) || updatedInterview!.rounds[0];
+                    const updatedRound = updatedInterview!.rounds.find(
+                        (r) => r.id === targetRound?.id
+                    ) || updatedInterview!.rounds[0];
 
-                // 8. Send confirmation emails
-                await sendConfirmationEmails(updatedInterview!, updatedRound);
+                    // 7. Send confirmation emails
+                    try {
+                        await sendConfirmationEmails(updatedInterview!, updatedRound);
+                        console.log(`[Calendly Sync] Confirmation emails sent for interview ${interview.id}`);
+                    } catch (emailError: any) {
+                        console.error(`[Calendly Sync] Failed to send confirmation emails for interview ${interview.id}:`, emailError.message);
+                    }
 
-                const isReschedule = oldStartTime && oldEndTime;
-                results.push({
-                    interviewId: interview.id,
-                    candidateEmail,
-                    eventDate,
-                    eventTime: formatLocalTime(matchingEvent.start_time),
-                    duration: calendlyService.calculateDurationMinutes(
-                        matchingEvent.start_time,
-                        matchingEvent.end_time
-                    ),
-                    action: isReschedule ? "rescheduled" : "scheduled",
-                });
+                    const isReschedule = oldStartTime && oldEndTime;
+                    results.push({
+                        interviewId: interview.id,
+                        candidateEmail,
+                        eventDate,
+                        eventTime: formatLocalTime(matchingEvent.start_time),
+                        duration: calendlyService.calculateDurationMinutes(
+                            matchingEvent.start_time,
+                            matchingEvent.end_time
+                        ),
+                        action: isReschedule ? "rescheduled" : "scheduled",
+                    });
+
+                    console.log(`[Calendly Sync] Successfully synced interview ${interview.id} - ${isReschedule ? "rescheduled" : "scheduled"}`);
+                } catch (interviewError: any) {
+                    console.error(`[Calendly Sync] Error processing interview ${interview.id}:`, interviewError.message);
+                    // Continue to next interview — don't let one failure block all syncs
+                }
             }
 
-            // 9. Check for rescheduled events (events that were already synced but updated)
+            // 8. Check for rescheduled events (events that were already synced but updated)
             const syncedInterviews = await prisma.interview.findMany({
                 where: {
                     status: "scheduled",
@@ -285,124 +312,267 @@ export const calendlyController = {
             });
 
             for (const interview of syncedInterviews) {
-                if (!interview.calendlyEventUri) continue;
+                try {
+                    if (!interview.calendlyEventUri) continue;
 
-                const calendlyEventUuid = calendlyService.extractUuidFromUri(
-                    interview.calendlyEventUri
-                );
-                const matchingEvent = events.find(
-                    (e) =>
-                        calendlyService.extractUuidFromUri(e.uri) === calendlyEventUuid
-                );
+                    const calendlyEventUuid = calendlyService.extractUuidFromUri(
+                        interview.calendlyEventUri
+                    );
+                    const candidateEmail = interview.candidate.email.toLowerCase();
 
-                if (!matchingEvent) continue;
+                    // Compute time window based on the stored start/end time
+                    const timeWindowStart = interview.startTime
+                        ? new Date(new Date(interview.startTime).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+                        : undefined;
+                    const timeWindowEnd = interview.endTime
+                        ? new Date(new Date(interview.endTime).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                        : undefined;
 
-                // Check if event was updated after our last sync
-                const eventUpdatedAt = new Date(matchingEvent.updated_at);
-                if (
-                    interview.lastSyncedAt &&
-                    eventUpdatedAt <= interview.lastSyncedAt
-                ) {
-                    continue;
-                }
+                    // Step 1: Try to find the event in active events (same URI)
+                    let matchingEvent: CalendlyScheduledEvent | null = null;
+                    let isNewEvent = false;
+                    try {
+                        const activeEvents = await calendlyService.getAllScheduledEvents({
+                            status: "active",
+                            minStartTime: timeWindowStart,
+                            maxStartTime: timeWindowEnd,
+                        });
+                        matchingEvent = activeEvents.find(
+                            (e) => calendlyService.extractUuidFromUri(e.uri) === calendlyEventUuid
+                        ) || null;
+                    } catch (fetchError: any) {
+                        console.error(`[Calendly Sync] Failed to fetch active events for interview ${interview.id}:`, fetchError.message);
+                        continue;
+                    }
 
-                // Event was rescheduled
-                const activeRound = interview.rounds.find(
-                    (r) =>
-                        r.status === "scheduled" || r.status === "in-progress"
-                );
-                if (!activeRound) continue;
+                    // Step 2: If not found in active events, the event may have been
+                    // replaced by Calendly (reschedule creates a new event, cancels old).
+                    // Check for a canceled event matching our stored URI.
+                    if (!matchingEvent) {
+                        console.log(`[Calendly Sync] Event ${calendlyEventUuid} not found in active events for interview ${interview.id}, checking for canceled events...`);
+                        try {
+                            const canceledEvents = await calendlyService.getAllScheduledEvents({
+                                status: "canceled",
+                                minStartTime: timeWindowStart,
+                                maxStartTime: timeWindowEnd,
+                            });
+                            const canceledEvent = canceledEvents.find(
+                                (e) => calendlyService.extractUuidFromUri(e.uri) === calendlyEventUuid
+                            );
 
-                const oldStartTime = activeRound.startTime;
-                const oldEndTime = activeRound.endTime;
-                const newStartTime = new Date(matchingEvent.start_time);
-                const newEndTime = new Date(matchingEvent.end_time);
+                            if (canceledEvent) {
+                                console.log(`[Calendly Sync] Found canceled event ${calendlyEventUuid} — interview was rescheduled, searching for new event...`);
 
-                // Skip if times haven't actually changed
-                if (
-                    oldStartTime?.getTime() === newStartTime.getTime() &&
-                    oldEndTime?.getTime() === newEndTime.getTime()
-                ) {
-                    // Just update lastSyncedAt
+                                // Strategy 1: Use Calendly's invitee_email filter
+                                const candidateEvents = await calendlyService.getAllScheduledEvents({
+                                    status: "active",
+                                    inviteeEmail: interview.candidate.email.toLowerCase(),
+                                });
+
+                                if (candidateEvents.length > 0) {
+                                    matchingEvent = candidateEvents[0];
+                                    isNewEvent = true;
+                                    console.log(`[Calendly Sync] Found replacement event ${matchingEvent.uri} via invitee_email filter`);
+                                }
+
+                                // Strategy 2: Use Calendly's native invitee linkage (old_invitee → new_invitee)
+                                if (!matchingEvent) {
+                                    try {
+                                        const canceledInvitees = await calendlyService.getEventInviteesAll(calendlyEventUuid, "canceled");
+                                        const rescheduledInvitee = canceledInvitees.find(
+                                            (inv) => inv.email.toLowerCase() === candidateEmail && inv.new_invitee
+                                        );
+
+                                        if (rescheduledInvitee?.new_invitee) {
+                                            console.log(`[Calendly Sync] Found rescheduled invitee linkage, extracting new event...`);
+                                            // new_invitee URI format: https://api.calendly.com/scheduled_events/{eventUuid}/invitees/{inviteeUuid}
+                                            const newInviteeParts = rescheduledInvitee.new_invitee.split("/");
+                                            const newEventUuid = newInviteeParts[newInviteeParts.indexOf("scheduled_events") + 1];
+
+                                            if (newEventUuid) {
+                                                // Fetch the new event
+                                                const newEvents = await calendlyService.getAllScheduledEvents({
+                                                    status: "active",
+                                                });
+                                                matchingEvent = newEvents.find(
+                                                    (e) => calendlyService.extractUuidFromUri(e.uri) === newEventUuid
+                                                ) || null;
+                                                if (matchingEvent) {
+                                                    isNewEvent = true;
+                                                    console.log(`[Calendly Sync] Found replacement event ${matchingEvent.uri} via invitee linkage`);
+                                                }
+                                            }
+                                        }
+                                    } catch (linkageError: any) {
+                                        console.error(`[Calendly Sync] Failed to use invitee linkage:`, linkageError.message);
+                                    }
+                                }
+                            }
+                        } catch (canceledError: any) {
+                            console.error(`[Calendly Sync] Failed to fetch canceled events for interview ${interview.id}:`, canceledError.message);
+                            continue;
+                        }
+                    }
+
+                    if (!matchingEvent) continue;
+
+                    // Handle canceled events (explicit cancel, not reschedule)
+                    if (matchingEvent.status === "canceled" && !isNewEvent) {
+                        console.log(`[Calendly Sync] Detected canceled event for interview ${interview.id}`);
+
+                        const activeRound = interview.rounds.find(
+                            (r) => r.status === "scheduled" || r.status === "in-progress"
+                        );
+                        if (activeRound) {
+                            await prisma.interviewRound.update({
+                                where: { id: activeRound.id },
+                                data: { status: "cancelled", lastSyncedAt: new Date() },
+                            });
+                        }
+
+                        await prisma.interview.update({
+                            where: { id: interview.id },
+                            data: { status: "cancelled", lastSyncedAt: new Date() },
+                        });
+
+                        console.log(`[Calendly Sync] Interview ${interview.id} marked as cancelled`);
+                        continue;
+                    }
+
+                    // Check if event was updated after our last sync
+                    const eventUpdatedAt = new Date(matchingEvent.updated_at);
+                    if (
+                        !isNewEvent &&
+                        interview.lastSyncedAt &&
+                        eventUpdatedAt <= interview.lastSyncedAt
+                    ) {
+                        continue;
+                    }
+
+                    // Event was rescheduled (either same URI updated, or new URI replacement)
+                    const activeRound = interview.rounds.find(
+                        (r) =>
+                            r.status === "scheduled" || r.status === "in-progress"
+                    );
+                    if (!activeRound) continue;
+
+                    const oldStartTime = activeRound.startTime;
+                    const oldEndTime = activeRound.endTime;
+                    const newStartTime = new Date(matchingEvent.start_time);
+                    const newEndTime = new Date(matchingEvent.end_time);
+
+                    // Skip if times haven't actually changed (and not a new event replacement)
+                    if (
+                        !isNewEvent &&
+                        oldStartTime?.getTime() === newStartTime.getTime() &&
+                        oldEndTime?.getTime() === newEndTime.getTime()
+                    ) {
+                        await prisma.interview.update({
+                            where: { id: interview.id },
+                            data: { lastSyncedAt: new Date() },
+                        });
+                        continue;
+                    }
+
+                    const newDate = formatLocalDate(matchingEvent.start_time);
+                    const newEventUuid = calendlyService.extractUuidFromUri(matchingEvent.uri);
+
+                    // Re-fetch invitees from the NEW event to get updated reschedule_url
+                    let updatedRescheduleUrl: string | null = null;
+                    try {
+                        const updatedInvitees = await calendlyService.getEventInviteesAll(newEventUuid);
+                        const candidateInvitee = updatedInvitees.find(
+                            (inv) => inv.email.toLowerCase() === candidateEmail && inv.status === "active"
+                        );
+                        if (candidateInvitee) {
+                            updatedRescheduleUrl = candidateInvitee.reschedule_url || null;
+                        }
+                    } catch (invError: any) {
+                        console.error(`[Calendly Sync] Failed to re-fetch invitees for reschedule URL:`, invError.message);
+                    }
+
+                    await prisma.interviewRound.update({
+                        where: { id: activeRound.id },
+                        data: {
+                            date: newDate,
+                            startTime: newStartTime,
+                            endTime: newEndTime,
+                            calendlyEventUri: matchingEvent.uri,
+                            calendlyRescheduleUrl: updatedRescheduleUrl,
+                            lastSyncedAt: new Date(),
+                        },
+                    });
+
                     await prisma.interview.update({
                         where: { id: interview.id },
-                        data: { lastSyncedAt: new Date() },
-                    });
-                    continue;
-                }
-
-                const newDate = formatLocalDate(matchingEvent.start_time);
-
-                // Update round
-                await prisma.interviewRound.update({
-                    where: { id: activeRound.id },
-                    data: {
-                        date: newDate,
-                        startTime: newStartTime,
-                        endTime: newEndTime,
-                        lastSyncedAt: new Date(),
-                    },
-                });
-
-                // Update interview
-                await prisma.interview.update({
-                    where: { id: interview.id },
-                    data: {
-                        date: newDate,
-                        startTime: newStartTime,
-                        endTime: newEndTime,
-                        lastSyncedAt: new Date(),
-                    },
-                });
-
-                // Re-fetch for emails
-                const updatedInterview = await prisma.interview.findUnique({
-                    where: { id: interview.id },
-                    include: {
-                        candidate: true,
-                        position: true,
-                        creator: true,
-                        interviewers: true,
-                        rounds: {
-                            orderBy: { roundNumber: "asc" },
-                            include: { interviewers: true },
+                        data: {
+                            date: newDate,
+                            startTime: newStartTime,
+                            endTime: newEndTime,
+                            calendlyEventUri: matchingEvent.uri,
+                            lastSyncedAt: new Date(),
                         },
-                    },
-                });
+                    });
 
-                const updatedRound = updatedInterview!.rounds.find(
-                    (r) => r.id === activeRound.id
-                );
+                    // Re-fetch for emails
+                    const updatedInterview = await prisma.interview.findUnique({
+                        where: { id: interview.id },
+                        include: {
+                            candidate: true,
+                            position: true,
+                            creator: true,
+                            interviewers: true,
+                            rounds: {
+                                orderBy: { roundNumber: "asc" },
+                                include: { interviewers: true },
+                            },
+                        },
+                    });
 
-                if (updatedInterview && updatedRound && oldStartTime && oldEndTime) {
-                    await sendRescheduleEmails(
-                        updatedInterview,
-                        updatedRound,
-                        oldStartTime,
-                        oldEndTime
+                    const updatedRound = updatedInterview!.rounds.find(
+                        (r) => r.id === activeRound.id
                     );
-                }
 
-                results.push({
-                    interviewId: interview.id,
-                    candidateEmail: interview.candidate.email,
-                    eventDate: newDate,
-                    eventTime: formatLocalTime(matchingEvent.start_time),
-                    duration: calendlyService.calculateDurationMinutes(
-                        matchingEvent.start_time,
-                        matchingEvent.end_time
-                    ),
-                    action: "rescheduled",
-                });
+                    if (updatedInterview && updatedRound && oldStartTime && oldEndTime) {
+                        try {
+                            await sendRescheduleEmails(
+                                updatedInterview,
+                                updatedRound,
+                                oldStartTime,
+                                oldEndTime
+                            );
+                            console.log(`[Calendly Sync] Reschedule emails sent for interview ${interview.id}`);
+                        } catch (emailError: any) {
+                            console.error(`[Calendly Sync] Failed to send reschedule emails for interview ${interview.id}:`, emailError.message);
+                        }
+                    }
+
+                    results.push({
+                        interviewId: interview.id,
+                        candidateEmail: interview.candidate.email,
+                        eventDate: newDate,
+                        eventTime: formatLocalTime(matchingEvent.start_time),
+                        duration: calendlyService.calculateDurationMinutes(
+                            matchingEvent.start_time,
+                            matchingEvent.end_time
+                        ),
+                        action: "rescheduled",
+                    });
+
+                    console.log(`[Calendly Sync] Rescheduled interview ${interview.id}`);
+                } catch (interviewError: any) {
+                    console.error(`[Calendly Sync] Error checking reschedule for interview ${interview.id}:`, interviewError.message);
+                }
             }
 
+            console.log(`[Calendly Sync] Completed. Synced ${results.length} event(s)`);
             return res.json({
                 message: "Sync completed",
                 syncedCount: results.length,
                 results,
             });
         } catch (error: any) {
-            console.error("Calendly sync error:", error);
+            console.error("[Calendly Sync] Fatal error:", error);
             const status = error.status || 500;
             const message = error.message || "Sync failed";
             return res.status(status).json({ message });

@@ -78,6 +78,10 @@ export interface CalendlyInvitee {
     no_show: boolean;
     created_at: string;
     updated_at: string;
+    old_invitee?: string;
+    new_invitee?: string;
+    scheduling_url?: string;
+    created_by?: string;
 }
 
 export interface CalendlyPagination {
@@ -147,9 +151,11 @@ export const calendlyService = {
 
     async getEventInvitees(
         eventUuid: string,
-        pageToken?: string
+        pageToken?: string,
+        status?: "active" | "canceled"
     ): Promise<{ collection: CalendlyInvitee[]; pagination: CalendlyPagination }> {
-        const params: Record<string, string> = { status: "active" };
+        const params: Record<string, string> = {};
+        if (status) params.status = status;
         if (pageToken) params.page_token = pageToken;
 
         const response = await axios.get(
@@ -166,12 +172,12 @@ export const calendlyService = {
         };
     },
 
-    async getEventInviteesAll(eventUuid: string): Promise<CalendlyInvitee[]> {
+    async getEventInviteesAll(eventUuid: string, status?: "active" | "canceled"): Promise<CalendlyInvitee[]> {
         const allInvitees: CalendlyInvitee[] = [];
         let pageToken: string | undefined;
 
         do {
-            const result = await this.getEventInvitees(eventUuid, pageToken);
+            const result = await this.getEventInvitees(eventUuid, pageToken, status);
             allInvitees.push(...result.collection);
             pageToken = result.pagination.next_page_token || undefined;
         } while (pageToken);
@@ -184,6 +190,7 @@ export const calendlyService = {
         minStartTime?: string;
         maxStartTime?: string;
         afterUpdatedAt?: string;
+        inviteeEmail?: string;
     }): Promise<CalendlyScheduledEvent[]> {
         const allEvents: CalendlyScheduledEvent[] = [];
         let pageToken: string | undefined;
@@ -193,6 +200,7 @@ export const calendlyService = {
                 status: params.status,
                 minStartTime: params.minStartTime,
                 maxStartTime: params.maxStartTime,
+                inviteeEmail: params.inviteeEmail,
                 count: 100,
                 pageToken,
             });
@@ -228,12 +236,20 @@ export const calendlyService = {
             console.error("[Calendly] Failed to fetch scheduling URL from API:", error.message);
         }
 
-        // Fallback: construct a best-effort URL
-        const userUri = process.env.CALENDLY_USER_URI || "";
-        const userSlug = userUri.split("/").pop() || "";
-        const slug = eventTypeUri.split("/").pop() || "";
-        const fallbackUrl = `https://calendly.com/${userSlug}/${slug}`;
-        console.log(`[Calendly] Using fallback scheduling URL: ${fallbackUrl}`);
+        // Fallback: construct a best-effort URL using the user slug
+        try {
+            const user = await this.getMe();
+            if (user.slug) {
+                const fallbackUrl = `https://calendly.com/${user.slug}`;
+                console.log(`[Calendly] Using fallback scheduling URL: ${fallbackUrl}`);
+                return fallbackUrl;
+            }
+        } catch (userError: any) {
+            console.error("[Calendly] Failed to fetch user for fallback URL:", userError.message);
+        }
+
+        const fallbackUrl = "https://calendly.com";
+        console.log(`[Calendly] Using generic fallback scheduling URL: ${fallbackUrl}`);
         return fallbackUrl;
     },
 

@@ -108,8 +108,19 @@ export const emailService = {
         time: string;
         duration: number;
         roundNumber: number;
+        rescheduleUrl?: string;
     }) {
         const template = loadTemplate("confirmation-interviewer.html");
+        const rescheduleButtonHtml = params.rescheduleUrl
+            ? `<table cellpadding="0" cellspacing="0" style="margin:0 0 10px;">
+                <tr>
+                    <td style="background-color:#4f46e5;border-radius:6px;">
+                        <a href="${params.rescheduleUrl}" target="_blank" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">Reschedule Interview</a>
+                    </td>
+                </tr>
+              </table>
+              <p style="color:#9ca3af;margin:0;font-size:12px;">Use this link to select a new date and time for this interview.</p>`
+            : `<p style="color:#6b7280;margin:0;font-size:13px;">If you need to reschedule, please contact the admin.</p>`;
         const html = replaceTemplateVars(template, {
             interviewerName: params.interviewerName,
             candidateName: params.candidateName,
@@ -118,6 +129,7 @@ export const emailService = {
             time: params.time,
             duration: String(params.duration),
             roundNumber: String(params.roundNumber),
+            rescheduleUrl: rescheduleButtonHtml,
         });
 
         return sendEmail(
@@ -193,8 +205,19 @@ export const emailService = {
         newDate: string;
         newTime: string;
         roundNumber: number;
+        rescheduleUrl?: string;
     }) {
         const template = loadTemplate("reschedule-notification.html");
+        const rescheduleButtonHtml = params.rescheduleUrl
+            ? `<table cellpadding="0" cellspacing="0" style="margin:0 0 10px;">
+                <tr>
+                    <td style="background-color:#d97706;border-radius:6px;">
+                        <a href="${params.rescheduleUrl}" target="_blank" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">Reschedule Interview</a>
+                    </td>
+                </tr>
+              </table>
+              <p style="color:#9ca3af;margin:0;font-size:12px;">Use this link to select a new date and time for this interview.</p>`
+            : `<p style="color:#6b7280;margin:0;font-size:13px;">If you need to reschedule, please contact the admin.</p>`;
         const html = replaceTemplateVars(template, {
             recipientName: params.recipientName,
             candidateName: params.candidateName,
@@ -204,6 +227,7 @@ export const emailService = {
             newDate: params.newDate,
             newTime: params.newTime,
             roundNumber: String(params.roundNumber),
+            rescheduleUrl: rescheduleButtonHtml,
         });
 
         return sendEmail(

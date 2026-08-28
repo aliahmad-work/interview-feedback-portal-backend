@@ -73,24 +73,33 @@ export async function createInterview(data: {
 
     // Scheduling mode: no date/time required, candidate will pick via Calendly
     if (data.schedulingMode) {
-        const interviewerIds = data.interviewerIds || (data.rounds && data.rounds[0] ? data.rounds[0].interviewerIds : []);
-        if (!interviewerIds || interviewerIds.length === 0) {
-            throw { status: 400, message: "At least one interviewer is required" };
-        }
-        for (const id of interviewerIds) {
-            if (!isValidObjectId(id)) {
-                throw { status: 400, message: "Invalid interviewer id" };
+        const rounds = data.rounds && data.rounds.length > 0
+            ? data.rounds
+            : [{ interviewerIds: data.interviewerIds || [], type: data.type, duration: data.duration || 60 }];
+
+        // Validate all rounds have interviewers
+        for (let i = 0; i < rounds.length; i++) {
+            const r = rounds[i];
+            if (!r.interviewerIds || r.interviewerIds.length === 0) {
+                throw { status: 400, message: `Round ${i + 1}: At least one interviewer is required` };
+            }
+            for (const id of r.interviewerIds) {
+                if (!isValidObjectId(id)) {
+                    throw { status: 400, message: `Round ${i + 1}: Invalid interviewer id` };
+                }
             }
         }
 
+        // Validate all interviewer ids are valid users
+        const allInterviewerIds = [...new Set(rounds.flatMap(r => r.interviewerIds))];
         const interviewers = await prisma.user.findMany({
             where: {
-                id: { in: interviewerIds },
+                id: { in: allInterviewerIds },
                 role: { name: "interviewer" }
             },
             select: { id: true }
         });
-        if (interviewers.length !== interviewerIds.length) {
+        if (interviewers.length !== allInterviewerIds.length) {
             throw { status: 400, message: "One or more assigned users are not valid interviewers" };
         }
 
@@ -98,14 +107,12 @@ export async function createInterview(data: {
             where: { candidateId: data.candidateId }
         });
 
-        const duration = data.duration || 60;
-
         const schedulingUrl = await calendlyService.getSchedulingUrl();
 
         const interview = await prisma.interview.create({
             data: {
                 round: existingCount + 1,
-                type: data.type || null,
+                type: data.type || rounds[0]?.type || null,
                 date: null,
                 startTime: null,
                 endTime: null,
@@ -113,7 +120,7 @@ export async function createInterview(data: {
                 candidateId: data.candidateId,
                 positionId: data.positionId,
                 createdBy: data.createdBy,
-                interviewerIds: interviewerIds,
+                interviewerIds: allInterviewerIds,
                 calendlySchedulingUrl: schedulingUrl,
             },
             include: {
@@ -125,31 +132,40 @@ export async function createInterview(data: {
             },
         });
 
-        // Create first round in pending_schedule status
-        const round = await prisma.interviewRound.create({
-            data: {
-                interviewId: interview.id,
-                roundNumber: 1,
-                type: data.type || null,
-                duration,
-                date: null,
-                startTime: null,
-                endTime: null,
-                status: "pending_schedule",
-                decision: "pending",
-                interviewerIds: interviewerIds,
-            },
-            include: {
-                interviewers: {
-                    select: {
-                        id: true,
-                        firstname: true,
-                        lastname: true,
-                        email: true,
-                        designation: true,
+        // Create all rounds in pending_schedule status
+        const createdRounds = await prisma.$transaction(async (tx) => {
+            const results = [];
+            for (let i = 0; i < rounds.length; i++) {
+                const r = rounds[i];
+                const duration = r.duration || 60;
+                const created = await tx.interviewRound.create({
+                    data: {
+                        interviewId: interview.id,
+                        roundNumber: i + 1,
+                        type: r.type || data.type || null,
+                        duration,
+                        date: null,
+                        startTime: null,
+                        endTime: null,
+                        status: "pending_schedule",
+                        decision: "pending",
+                        interviewerIds: r.interviewerIds,
                     },
-                },
-            },
+                    include: {
+                        interviewers: {
+                            select: {
+                                id: true,
+                                firstname: true,
+                                lastname: true,
+                                email: true,
+                                designation: true,
+                            },
+                        },
+                    },
+                });
+                results.push(created);
+            }
+            return results;
         });
 
         // Send scheduling email to candidate
@@ -168,7 +184,7 @@ export async function createInterview(data: {
 
         return {
             ...interview,
-            rounds: [round],
+            rounds: createdRounds,
         };
     }
 
