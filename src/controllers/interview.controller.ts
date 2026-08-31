@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import * as interviewServices from "../service/interview.service";
 import * as interviewRoundServices from "../service/interview-round.service";
+import prisma from "../lib/prisma";
+import { calendlyService } from "../service/calendly.service";
+import { emailService } from "../service/email.service";
 
 export async function createInterview(req: Request, res: Response) {
     try {
@@ -218,6 +221,41 @@ export async function updateRoundDecision(req: Request, res: Response) {
             decision,
             user.id
         );
+
+        if (decision === "next_round" && updated) {
+            try {
+                const interview = await prisma.interview.findUnique({
+                    where: { id: id as string },
+                    include: {
+                        candidate: { select: { email: true, firstname: true, lastname: true } },
+                        position: { select: { title: true } },
+                        rounds: { orderBy: { roundNumber: "asc" } }
+                    }
+                });
+
+                if (interview) {
+                    const nextRoundNumber = updated.roundNumber + 1;
+                    const schedulingUrl = await calendlyService.getSchedulingUrl();
+
+                    await emailService.sendScheduleToCandidate({
+                        candidateEmail: interview.candidate.email,
+                        candidateName: `${interview.candidate.firstname} ${interview.candidate.lastname}`,
+                        positionName: interview.position.title,
+                        roundNumber: nextRoundNumber,
+                        schedulingUrl,
+                    });
+
+                    await prisma.interview.update({
+                        where: { id: id as string },
+                        data: { calendlySchedulingUrl: schedulingUrl }
+                    });
+
+                    console.log(`[Email] Sent scheduling email to candidate for round ${nextRoundNumber} of interview ${id}`);
+                }
+            } catch (emailError: any) {
+                console.error("[Email] FAILED to send scheduling email for next round:", emailError.message);
+            }
+        }
 
         return res.json({ round: updated });
     } catch (error: any) {
