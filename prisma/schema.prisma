@@ -81,6 +81,9 @@ model JobPositions {
   maximumExperience Int?
   description       String
   status            String    @default("open")
+  openings          Int       @default(1)
+  closedAt          DateTime?
+  closeReason       String?
   departmentId      String    @db.ObjectId
   department        Department @relation(fields: [departmentId], references: [id])
   createdBy         String    @db.ObjectId
