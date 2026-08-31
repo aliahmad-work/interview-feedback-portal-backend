@@ -20,7 +20,7 @@ import {
 
 import { calendlyController } from "../controllers/calendly.controller";
 import { getCandidates, getCandidateById, createCandidate, updateCandidate, deleteCandidate, downloadResume } from "../controllers/candidate.controller";
-import { getInterviewers, getPositions, getDepartments, createUser, createPosition } from "../controllers/admin.controller";
+import { getInterviewers, getPositions, getPositionById, getDepartments, createUser, createPosition, updatePosition } from "../controllers/admin.controller";
 import { VALID_DECISIONS } from "../service/interview.service";
 
 const router = Router();
@@ -248,6 +248,26 @@ router.get(
     authenticate,
     authorize("admin"),
     getPositions
+);
+
+router.get(
+    "/positions/:id",
+    authenticate,
+    authorize("admin"),
+    getPositionById
+);
+
+router.put(
+    "/positions/:id",
+    authenticate,
+    authorize("admin"),
+    [
+        body("status").optional().isIn(["open", "closed"]).withMessage("Status must be open or closed"),
+        body("openings").optional().isInt({ min: 1 }).withMessage("Openings must be a number of at least 1"),
+        body("closeReason").optional().isString().withMessage("Close reason must be a string")
+    ],
+    validate,
+    updatePosition
 );
 
 // Calendly Integration Routes

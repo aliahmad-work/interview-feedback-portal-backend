@@ -50,7 +50,7 @@ export async function createUser(req: Request, res: Response) {
 export async function createPosition(req: Request, res: Response) {
     try {
         const user = (req as any).user;
-        const { title, departmentId, requiredSkills, minimumExperience, maximumExperience, description, status } = req.body;
+        const { title, departmentId, requiredSkills, minimumExperience, maximumExperience, description, status, openings } = req.body;
 
         const position = await adminServices.createPosition({
             title,
@@ -60,10 +60,49 @@ export async function createPosition(req: Request, res: Response) {
             maximumExperience: maximumExperience !== undefined && maximumExperience !== '' ? Number(maximumExperience) : undefined,
             description,
             status,
+            openings: openings !== undefined && openings !== '' ? Number(openings) : undefined,
             createdBy: user.id
         });
 
         return res.status(201).json({ position });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
+export async function getPositionById(req: Request, res: Response) {
+    try {
+        const id = req.params.id as string;
+        const position = await adminServices.getPositionById(id);
+        return res.json({ position });
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
+export async function updatePosition(req: Request, res: Response) {
+    try {
+        const id = req.params.id as string;
+        const { status, openings, closeReason, title, departmentId, requiredSkills, minimumExperience, maximumExperience, description } = req.body;
+
+        const position = await adminServices.updatePosition({
+            id,
+            status,
+            openings: openings !== undefined && openings !== '' ? Number(openings) : undefined,
+            closeReason,
+            title,
+            departmentId,
+            requiredSkills,
+            minimumExperience: minimumExperience !== undefined && minimumExperience !== '' ? Number(minimumExperience) : undefined,
+            maximumExperience: maximumExperience !== undefined && maximumExperience !== '' ? Number(maximumExperience) : undefined,
+            description
+        });
+
+        return res.json({ position });
     } catch (error: any) {
         const status = error.status || 500;
         const message = error.message || "Internal server error";

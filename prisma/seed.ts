@@ -121,6 +121,7 @@ async function main() {
       maximumExperience: 8,
       description: 'Senior role responsible for designing and implementing complex software solutions',
       status: 'open',
+      openings: 3,
       departmentId: engineeringDept.id,
       createdBy: admin.id,
     },
@@ -134,6 +135,7 @@ async function main() {
       maximumExperience: 4,
       description: 'Frontend developer responsible for building user interfaces',
       status: 'open',
+      openings: 2,
       departmentId: engineeringDept.id,
       createdBy: admin.id,
     },
@@ -147,6 +149,7 @@ async function main() {
       maximumExperience: 6,
       description: 'Backend developer responsible for server-side logic and APIs',
       status: 'open',
+      openings: 2,
       departmentId: engineeringDept.id,
       createdBy: admin.id,
     },
@@ -160,8 +163,41 @@ async function main() {
       maximumExperience: 7,
       description: 'Product manager responsible for product roadmap and strategy',
       status: 'open',
+      openings: 1,
       departmentId: productDept.id,
       createdBy: admin.id,
+    },
+  });
+
+  const dataEngineerPosition = await prisma.jobPositions.create({
+    data: {
+      title: 'Data Engineer',
+      requiredSkills: ['Python', 'SQL', 'Airflow', 'Spark', 'AWS'],
+      minimumExperience: 3,
+      maximumExperience: 6,
+      description: 'Data engineer responsible for building and maintaining data pipelines',
+      status: 'closed',
+      openings: 2,
+      departmentId: engineeringDept.id,
+      createdBy: admin.id,
+      closedAt: new Date(),
+      closeReason: 'Hiring freeze for the quarter',
+    },
+  });
+
+  const uxDesignerPosition = await prisma.jobPositions.create({
+    data: {
+      title: 'UX Designer',
+      requiredSkills: ['Figma', 'User Research', 'Prototyping', 'Wireframing'],
+      minimumExperience: 2,
+      maximumExperience: 5,
+      description: 'UX designer responsible for product design and user research',
+      status: 'closed',
+      openings: 1,
+      departmentId: productDept.id,
+      createdBy: admin.id,
+      closedAt: new Date(),
+      closeReason: 'Position filled and no longer required',
     },
   });
 
@@ -170,6 +206,8 @@ async function main() {
     frontendDevPosition,
     backendDevPosition,
     productManagerPosition,
+    dataEngineerPosition,
+    uxDesignerPosition,
   });
 
   const candidates = [];
@@ -210,10 +248,11 @@ async function main() {
   const interviewTypes = ['Technical', 'Behavioral', 'System Design', 'Cultural Fit'];
 
   // Create interviews WITHOUT rounds (backward compatible)
+  const positionList = [seniorDevPosition, frontendDevPosition, backendDevPosition, productManagerPosition, dataEngineerPosition, uxDesignerPosition];
   const directInterviews = [];
   for (let i = 0; i < 10; i++) {
     const candidate = candidates[i % candidates.length];
-    const position = [seniorDevPosition, frontendDevPosition, backendDevPosition, productManagerPosition][i % 4];
+    const position = positionList[i % positionList.length];
     const interviewDate = new Date();
     interviewDate.setDate(interviewDate.getDate() + i);
     
@@ -223,6 +262,10 @@ async function main() {
     const endTime = new Date(startTime);
     endTime.setHours(startTime.getHours() + 1);
 
+    const isClosed = position.status === 'closed';
+    const decisions = ['hired', 'rejected', 'rejected', 'hold', 'next_round'];
+    const decision = i >= 3 ? decisions[i % decisions.length] : 'pending';
+
     const interview = await prisma.interview.create({
       data: {
         round: i + 1,
@@ -230,7 +273,10 @@ async function main() {
         date: interviewDate.toISOString().split('T')[0],
         startTime,
         endTime,
-        status: i < 5 ? 'completed' : 'scheduled',
+        status: i < 8 ? 'completed' : 'scheduled',
+        decision,
+        decisionUpdatedAt: decision !== 'pending' ? new Date() : null,
+        decisionUpdatedBy: decision !== 'pending' ? admin.id : null,
         candidateId: candidate.id,
         positionId: position.id,
         createdBy: admin.id,
@@ -246,7 +292,7 @@ async function main() {
   const multiRoundInterviews = [];
   for (let i = 0; i < 5; i++) {
     const candidate = candidates[5 + i];
-    const position = [seniorDevPosition, frontendDevPosition, backendDevPosition, productManagerPosition][i % 4];
+    const position = positionList[(i + 2) % positionList.length];
     const interviewDate = new Date();
     interviewDate.setDate(interviewDate.getDate() + 10 + i);
     
