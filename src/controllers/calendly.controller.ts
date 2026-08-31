@@ -31,12 +31,13 @@ function formatLocalTime(isoString: string): string {
     });
 }
 
-async function sendConfirmationEmails(interview: any, round: any) {
+async function sendConfirmationEmails(interview: any, round: any, event?: any) {
     const candidate = interview.candidate;
     const position = interview.position;
     const roundInterviewers = round.interviewers || [];
     const creator = interview.creator;
     const rescheduleUrl = round.calendlyRescheduleUrl || "";
+    const meetingUrl = event ? calendlyService.extractMeetingUrl(event) || undefined : undefined;
 
     const dateStr = formatLocalDate(round.date || interview.date);
     const timeStr = formatLocalTime(round.startTime || interview.startTime);
@@ -58,6 +59,7 @@ async function sendConfirmationEmails(interview: any, round: any) {
         time: timeStr,
         duration,
         roundNumber: round.roundNumber,
+        meetingUrl,
     });
 
     // Send to interviewers assigned to THIS round only
@@ -72,6 +74,7 @@ async function sendConfirmationEmails(interview: any, round: any) {
             duration,
             roundNumber: round.roundNumber,
             rescheduleUrl,
+            meetingUrl,
         });
     }
 
@@ -86,6 +89,7 @@ async function sendConfirmationEmails(interview: any, round: any) {
         duration,
         roundNumber: round.roundNumber,
         interviewerNames,
+        meetingUrl,
     });
 }
 
@@ -93,13 +97,15 @@ async function sendRescheduleEmails(
     interview: any,
     round: any,
     oldStartTime: Date,
-    oldEndTime: Date
+    oldEndTime: Date,
+    event?: any
 ) {
     const candidate = interview.candidate;
     const position = interview.position;
     const roundInterviewers = round.interviewers || [];
     const creator = interview.creator;
     const rescheduleUrl = round.calendlyRescheduleUrl || "";
+    const meetingUrl = event ? calendlyService.extractMeetingUrl(event) || undefined : undefined;
 
     const oldDateStr = formatLocalDate(oldStartTime.toISOString());
     const oldTimeStr = formatLocalTime(oldStartTime.toISOString());
@@ -127,6 +133,7 @@ async function sendRescheduleEmails(
             newTime: newTimeStr,
             roundNumber: round.roundNumber,
             rescheduleUrl,
+            meetingUrl,
         });
     }
 }
@@ -266,7 +273,7 @@ export const calendlyController = {
 
                     // 7. Send confirmation emails
                     try {
-                        await sendConfirmationEmails(updatedInterview!, updatedRound);
+                        await sendConfirmationEmails(updatedInterview!, updatedRound, matchingEvent);
                         console.log(`[Calendly Sync] Confirmation emails sent for interview ${interview.id}`);
                     } catch (emailError: any) {
                         console.error(`[Calendly Sync] Failed to send confirmation emails for interview ${interview.id}:`, emailError.message);
@@ -539,7 +546,8 @@ export const calendlyController = {
                                 updatedInterview,
                                 updatedRound,
                                 oldStartTime,
-                                oldEndTime
+                                oldEndTime,
+                                matchingEvent
                             );
                             console.log(`[Calendly Sync] Reschedule emails sent for interview ${interview.id}`);
                         } catch (emailError: any) {

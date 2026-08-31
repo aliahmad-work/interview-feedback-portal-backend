@@ -109,8 +109,26 @@ export const emailService = {
         duration: number;
         roundNumber: number;
         rescheduleUrl?: string;
+        meetingUrl?: string;
     }) {
         const template = loadTemplate("confirmation-interviewer.html");
+        const meetingLinkSection = params.meetingUrl
+            ? `<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;margin:0 0 25px;">
+                <tr>
+                    <td style="padding:16px 20px;">
+                        <p style="margin:0 0 10px;font-size:14px;font-weight:600;color:#1e40af;">Google Meet / Meeting Link:</p>
+                        <table cellpadding="0" cellspacing="0" style="margin:0 0 10px;">
+                            <tr>
+                                <td style="background-color:#2563eb;border-radius:6px;">
+                                    <a href="${params.meetingUrl}" target="_blank" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">Join Google Meet</a>
+                                </td>
+                            </tr>
+                        </table>
+                        <p style="margin:0;font-size:12px;color:#6b7280;word-break:break-all;">Direct Link: <a href="${params.meetingUrl}" target="_blank" style="color:#2563eb;text-decoration:underline;">${params.meetingUrl}</a></p>
+                    </td>
+                </tr>
+              </table>`
+            : "";
         const rescheduleButtonHtml = params.rescheduleUrl
             ? `<table cellpadding="0" cellspacing="0" style="margin:0 0 10px;">
                 <tr>
@@ -130,6 +148,7 @@ export const emailService = {
             duration: String(params.duration),
             roundNumber: String(params.roundNumber),
             rescheduleUrl: rescheduleButtonHtml,
+            meetingLinkSection,
         });
 
         return sendEmail(
@@ -149,8 +168,18 @@ export const emailService = {
         duration: number;
         roundNumber: number;
         interviewerNames: string;
+        meetingUrl?: string;
     }) {
         const template = loadTemplate("confirmation-admin.html");
+        const meetingLinkRow = params.meetingUrl
+            ? `<tr>
+                <td style="padding:8px 0;color:#374151;font-size:14px;font-weight:600;">Meeting Link:</td>
+                <td style="padding:8px 0;color:#1f2937;font-size:14px;">
+                    <a href="${params.meetingUrl}" target="_blank" style="color:#2563eb;font-weight:600;text-decoration:underline;">Join Meeting</a>
+                    <span style="color:#6b7280;font-size:12px;display:block;word-break:break-all;">(${params.meetingUrl})</span>
+                </td>
+               </tr>`
+            : "";
         const html = replaceTemplateVars(template, {
             adminName: params.adminName,
             candidateName: params.candidateName,
@@ -160,6 +189,7 @@ export const emailService = {
             duration: String(params.duration),
             roundNumber: String(params.roundNumber),
             interviewerNames: params.interviewerNames,
+            meetingLinkRow,
         });
 
         return sendEmail(
@@ -177,8 +207,26 @@ export const emailService = {
         time: string;
         duration: number;
         roundNumber: number;
+        meetingUrl?: string;
     }) {
         const template = loadTemplate("confirmation-candidate.html");
+        const meetingLinkSection = params.meetingUrl
+            ? `<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;margin:0 0 25px;">
+                <tr>
+                    <td style="padding:16px 20px;">
+                        <p style="margin:0 0 10px;font-size:14px;font-weight:600;color:#1e40af;">Google Meet / Meeting Link:</p>
+                        <table cellpadding="0" cellspacing="0" style="margin:0 0 10px;">
+                            <tr>
+                                <td style="background-color:#7c3aed;border-radius:6px;">
+                                    <a href="${params.meetingUrl}" target="_blank" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">Join Google Meet</a>
+                                </td>
+                            </tr>
+                        </table>
+                        <p style="margin:0;font-size:12px;color:#6b7280;word-break:break-all;">Direct Link: <a href="${params.meetingUrl}" target="_blank" style="color:#7c3aed;text-decoration:underline;">${params.meetingUrl}</a></p>
+                    </td>
+                </tr>
+              </table>`
+            : "";
         const html = replaceTemplateVars(template, {
             candidateName: params.candidateName,
             positionName: params.positionName,
@@ -186,6 +234,7 @@ export const emailService = {
             time: params.time,
             duration: String(params.duration),
             roundNumber: String(params.roundNumber),
+            meetingLinkSection,
         });
 
         return sendEmail(
@@ -206,8 +255,26 @@ export const emailService = {
         newTime: string;
         roundNumber: number;
         rescheduleUrl?: string;
+        meetingUrl?: string;
     }) {
         const template = loadTemplate("reschedule-notification.html");
+        const meetingLinkSection = params.meetingUrl
+            ? `<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;margin:0 0 25px;">
+                <tr>
+                    <td style="padding:16px 20px;">
+                        <p style="margin:0 0 10px;font-size:14px;font-weight:600;color:#1e40af;">Updated Google Meet / Meeting Link:</p>
+                        <table cellpadding="0" cellspacing="0" style="margin:0 0 10px;">
+                            <tr>
+                                <td style="background-color:#2563eb;border-radius:6px;">
+                                    <a href="${params.meetingUrl}" target="_blank" style="display:inline-block;padding:12px 24px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">Join Google Meet</a>
+                                </td>
+                            </tr>
+                        </table>
+                        <p style="margin:0;font-size:12px;color:#6b7280;word-break:break-all;">Direct Link: <a href="${params.meetingUrl}" target="_blank" style="color:#2563eb;text-decoration:underline;">${params.meetingUrl}</a></p>
+                    </td>
+                </tr>
+              </table>`
+            : "";
         const rescheduleButtonHtml = params.rescheduleUrl
             ? `<table cellpadding="0" cellspacing="0" style="margin:0 0 10px;">
                 <tr>
@@ -228,6 +295,7 @@ export const emailService = {
             newTime: params.newTime,
             roundNumber: String(params.roundNumber),
             rescheduleUrl: rescheduleButtonHtml,
+            meetingLinkSection,
         });
 
         return sendEmail(

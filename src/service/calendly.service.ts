@@ -34,6 +34,13 @@ export interface CalendlyEventType {
     };
 }
 
+export interface CalendlyEventLocation {
+    type?: string;
+    location?: string;
+    join_url?: string;
+    status?: string;
+}
+
 export interface CalendlyScheduledEvent {
     uri: string;
     name: string;
@@ -53,7 +60,7 @@ export interface CalendlyScheduledEvent {
         created_at: string;
         updated_at: string;
     }>;
-    location: string | null;
+    location: CalendlyEventLocation | string | null;
     cancellation: {
         canceled_by: string;
         reason: string;
@@ -283,5 +290,30 @@ export const calendlyService = {
         const start = new Date(startTime);
         const end = new Date(endTime);
         return Math.round((end.getTime() - start.getTime()) / 60000);
+    },
+
+    extractMeetingUrl(event: CalendlyScheduledEvent | any): string | null {
+        if (!event || !event.location) {
+            return null;
+        }
+
+        if (typeof event.location === "object") {
+            if (event.location.join_url) {
+                return event.location.join_url;
+            }
+            if (event.location.location && /^https?:\/\//i.test(event.location.location)) {
+                return event.location.location;
+            }
+        } else if (typeof event.location === "string") {
+            if (/^https?:\/\//i.test(event.location)) {
+                return event.location;
+            }
+            const match = event.location.match(/https?:\/\/[^\s]+/i);
+            if (match) {
+                return match[0];
+            }
+        }
+
+        return null;
     },
 };
