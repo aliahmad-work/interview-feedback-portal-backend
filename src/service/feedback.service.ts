@@ -127,7 +127,7 @@ export async function submitFeedback(data: SubmitFeedbackData) {
         const remainingActiveRounds = await tx.interviewRound.count({
           where: {
             interviewId: data.interviewId,
-            status: { in: ["pending", "scheduled", "in-progress"] }
+            status: { in: ["pending", "pending_schedule", "scheduled", "in-progress"] }
           }
         });
 

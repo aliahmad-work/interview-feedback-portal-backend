@@ -1,4 +1,6 @@
 import prisma from "../lib/prisma";
+import { calendlyService } from "./calendly.service";
+import { emailService } from "./email.service";
 
 const isValidObjectId = (id: string) => /^[a-f\d]{24}$/i.test(id);
 
@@ -395,7 +397,7 @@ export async function updateRoundDecision(
             if (nextRound) {
                 const nextStatus = nextRound.date && nextRound.startTime && nextRound.endTime
                     ? "scheduled"
-                    : "pending";
+                    : "pending_schedule";
                 await tx.interviewRound.update({
                     where: { id: nextRound.id },
                     data: { status: nextStatus }
@@ -406,7 +408,11 @@ export async function updateRoundDecision(
                 data: {
                     decision,
                     decisionUpdatedAt: new Date(),
-                    decisionUpdatedBy: adminId
+                    decisionUpdatedBy: adminId,
+                    status: "pending_schedule",
+                    startTime: null,
+                    endTime: null,
+                    date: null
                 }
             });
         } else if (decision === "rejected" || decision === "hired") {
@@ -510,6 +516,8 @@ export async function resumeInterview(interviewId: string, adminId: string) {
     const interview = await prisma.interview.findUnique({
         where: { id: interviewId },
         include: {
+            candidate: true,
+            position: true,
             rounds: { orderBy: { roundNumber: "asc" } }
         }
     });
@@ -532,6 +540,20 @@ export async function resumeInterview(interviewId: string, adminId: string) {
 
     const nextRound = interview.rounds.find(r => r.roundNumber === heldRound.roundNumber + 1);
 
+    let nextStatus = "pending";
+    let schedulingUrl: string | null = null;
+    let shouldSendEmail = false;
+
+    if (nextRound) {
+        if (nextRound.date && nextRound.startTime && nextRound.endTime) {
+            nextStatus = "scheduled";
+        } else {
+            nextStatus = "pending_schedule";
+            schedulingUrl = await calendlyService.getSchedulingUrl();
+            shouldSendEmail = true;
+        }
+    }
+
     await prisma.$transaction(async (tx) => {
         await tx.interviewRound.update({
             where: { id: heldRound.id },
@@ -543,9 +565,6 @@ export async function resumeInterview(interviewId: string, adminId: string) {
         });
 
         if (nextRound) {
-            const nextStatus = nextRound.date && nextRound.startTime && nextRound.endTime
-                ? "scheduled"
-                : "pending";
             await tx.interviewRound.update({
                 where: { id: nextRound.id },
                 data: { status: nextStatus }
@@ -556,12 +575,28 @@ export async function resumeInterview(interviewId: string, adminId: string) {
             where: { id: interviewId },
             data: {
                 decision: "next_round",
-                status: "scheduled",
+                status: nextStatus === "pending_schedule" ? "pending_schedule" : "scheduled",
+                calendlySchedulingUrl: schedulingUrl || interview.calendlySchedulingUrl,
                 decisionUpdatedAt: new Date(),
                 decisionUpdatedBy: adminId
             }
         });
     });
+
+    if (shouldSendEmail && schedulingUrl && nextRound) {
+        try {
+            await emailService.sendScheduleToCandidate({
+                candidateEmail: interview.candidate.email,
+                candidateName: `${interview.candidate.firstname} ${interview.candidate.lastname}`,
+                positionName: interview.position.title,
+                roundNumber: nextRound.roundNumber,
+                schedulingUrl,
+            });
+            console.log(`[Email] Sent scheduling email to candidate for round ${nextRound.roundNumber} on resume of interview ${interviewId}`);
+        } catch (emailError: any) {
+            console.error("[Email] FAILED to send scheduling email on resume:", emailError.message || emailError);
+        }
+    }
 
     return prisma.interview.findUnique({
         where: { id: interviewId },
