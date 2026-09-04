@@ -3,7 +3,7 @@ import { body } from "express-validator";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
 import { validate } from "../middleware/validate.middleware";
-import { uploadResume } from "../middleware/upload.middleware";
+import { uploadResume, uploadMultipleResumes } from "../middleware/upload.middleware";
 import {
     createInterview,
     getAllInterviews,
@@ -19,9 +19,10 @@ import {
 } from "../controllers/interview.controller";
 
 import { calendlyController } from "../controllers/calendly.controller";
-import { getCandidates, getCandidateById, createCandidate, updateCandidate, deleteCandidate, downloadResume } from "../controllers/candidate.controller";
+import { getCandidates, getCandidateById, createCandidate, updateCandidate, deleteCandidate, downloadResume, bulkUploadAndMatchResumes } from "../controllers/candidate.controller";
 import { getInterviewers, getPositions, getPositionById, getDepartments, createUser, createPosition, updatePosition } from "../controllers/admin.controller";
 import { VALID_DECISIONS } from "../service/interview.service";
+
 
 const router = Router();
 
@@ -55,6 +56,19 @@ router.post(
     validate,
     createCandidate
 );
+
+router.post(
+    "/candidates/bulk-match",
+    authenticate,
+    authorize("admin"),
+    uploadMultipleResumes,
+    [
+        body("positionId").notEmpty().withMessage("Position ID is required")
+    ],
+    validate,
+    bulkUploadAndMatchResumes
+);
+
 
 router.get(
     "/candidates/:id",

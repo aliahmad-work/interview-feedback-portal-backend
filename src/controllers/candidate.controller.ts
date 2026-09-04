@@ -121,3 +121,34 @@ export async function downloadResume(req: Request, res: Response) {
         return res.status(status).json({ message });
     }
 }
+
+export async function bulkUploadAndMatchResumes(req: Request, res: Response) {
+    try {
+        const user = (req as any).user;
+        const { positionId } = req.body;
+        const files = req.files as Express.Multer.File[] | undefined;
+
+        if (!positionId) {
+            return res.status(400).json({ message: "positionId is required" });
+        }
+
+        if (!files || files.length === 0) {
+            return res.status(400).json({ message: "Please upload at least one resume file" });
+        }
+
+        const { processBatchResumes } = await import("../service/resumeMatcher.service");
+
+        const result = await processBatchResumes({
+            positionId,
+            files,
+            createdBy: user.id
+        });
+
+        return res.json(result);
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
+}
+
