@@ -4,6 +4,7 @@ import * as interviewRoundServices from "../service/interview-round.service";
 import prisma from "../lib/prisma";
 import { calendlyService } from "../service/calendly.service";
 import { emailService } from "../service/email.service";
+import * as candidateServices from "../service/candidate.service";
 
 export async function createInterview(req: Request, res: Response) {
     try {
@@ -104,6 +105,59 @@ export async function getCandidateDetails(req: Request, res: Response) {
     return res.json({
         candidate
     });
+}
+
+export async function downloadCandidateResume(req: Request, res: Response) {
+    try {
+        const user = (req as any).user;
+        const { id } = req.params;
+
+        const resume = await candidateServices.getCandidateResume(id as string);
+
+        if (!resume) {
+            return res.status(404).json({ message: "Candidate or resume not found" });
+        }
+
+        // Security: only allow interviewers who are assigned to an interview for this candidate
+        const assigned = await prisma.interview.findFirst({
+            where: {
+                candidateId: id as string,
+                OR: [
+                    { interviewerIds: { has: user.id } },
+                    {
+                        rounds: {
+                            some: {
+                                interviewerIds: { has: user.id }
+                            }
+                        }
+                    }
+                ]
+            },
+            select: { id: true }
+        });
+
+        if (!assigned) {
+            return res.status(403).json({ message: "You are not assigned to this candidate's interview" });
+        }
+
+        const ext = resume.resumeMimeType === "application/pdf" ? "pdf"
+            : resume.resumeMimeType === "application/msword" ? "doc"
+            : resume.resumeMimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ? "docx"
+            : resume.resumeMimeType?.split("/")[1] || "pdf";
+
+        const filename = `${resume.firstname}_${resume.lastname}_resume.${ext}`;
+
+        res.set({
+            "Content-Type": resume.resumeMimeType || "application/octet-stream",
+            "Content-Disposition": `attachment; filename="${filename}"`
+        });
+
+        return res.send(Buffer.from(resume.resumeData));
+    } catch (error: any) {
+        const status = error.status || 500;
+        const message = error.message || "Internal server error";
+        return res.status(status).json({ message });
+    }
 }
 
 export async function updateDecision(req: Request, res: Response) {

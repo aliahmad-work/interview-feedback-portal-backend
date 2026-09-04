@@ -14,6 +14,30 @@ interface SyncResult {
 
 function formatLocalDate(isoString: string): string {
     const date = new Date(isoString);
+    if (isNaN(date.getTime())) return isoString;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+}
+
+function formatDisplayDate(value: string): string {
+    if (!value) return "";
+    // Handle YYYY-MM-DD (stored format) without UTC/timezone day-shift
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    if (m) {
+        const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+            });
+        }
+    }
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return value;
     return date.toLocaleDateString("en-US", {
         weekday: "long",
         year: "numeric",
@@ -39,7 +63,7 @@ async function sendConfirmationEmails(interview: any, round: any, event?: any) {
     const rescheduleUrl = round.calendlyRescheduleUrl || "";
     const meetingUrl = event ? calendlyService.extractMeetingUrl(event) || undefined : undefined;
 
-    const dateStr = formatLocalDate(round.date || interview.date);
+    const dateStr = formatDisplayDate(round.date || interview.date);
     const timeStr = formatLocalTime(round.startTime || interview.startTime);
     const duration = calendlyService.calculateDurationMinutes(
         (round.startTime || interview.startTime).toISOString(),
@@ -49,6 +73,14 @@ async function sendConfirmationEmails(interview: any, round: any, event?: any) {
     const interviewerNames = roundInterviewers
         .map((i: any) => `${i.firstname} ${i.lastname}`)
         .join(", ");
+
+    // Candidate CV (stored as binary in the DB) to attach to scheduling/confirmation emails
+    const resume = {
+        candidateFirstname: candidate.firstname,
+        candidateLastname: candidate.lastname,
+        resumeData: candidate.resumeData,
+        resumeMimeType: candidate.resumeMimeType,
+    };
 
     // Send to candidate
     await emailService.sendConfirmationToCandidate({
@@ -60,6 +92,7 @@ async function sendConfirmationEmails(interview: any, round: any, event?: any) {
         duration,
         roundNumber: round.roundNumber,
         meetingUrl,
+        resume,
     });
 
     // Send to interviewers assigned to THIS round only
@@ -75,6 +108,7 @@ async function sendConfirmationEmails(interview: any, round: any, event?: any) {
             roundNumber: round.roundNumber,
             rescheduleUrl,
             meetingUrl,
+            resume,
         });
     }
 
@@ -90,6 +124,7 @@ async function sendConfirmationEmails(interview: any, round: any, event?: any) {
         roundNumber: round.roundNumber,
         interviewerNames,
         meetingUrl,
+        resume,
     });
 }
 
@@ -107,9 +142,9 @@ async function sendRescheduleEmails(
     const rescheduleUrl = round.calendlyRescheduleUrl || "";
     const meetingUrl = event ? calendlyService.extractMeetingUrl(event) || undefined : undefined;
 
-    const oldDateStr = formatLocalDate(oldStartTime.toISOString());
+    const oldDateStr = formatDisplayDate(oldStartTime.toISOString());
     const oldTimeStr = formatLocalTime(oldStartTime.toISOString());
-    const newDateStr = formatLocalDate(round.date || interview.date);
+    const newDateStr = formatDisplayDate(round.date || interview.date);
     const newTimeStr = formatLocalTime(round.startTime || interview.startTime);
 
     const allRecipients = [
@@ -120,6 +155,14 @@ async function sendRescheduleEmails(
             name: `${i.firstname} ${i.lastname}`,
         })),
     ];
+
+    // Candidate CV (stored as binary in the DB) to attach to reschedule notifications
+    const resume = {
+        candidateFirstname: candidate.firstname,
+        candidateLastname: candidate.lastname,
+        resumeData: candidate.resumeData,
+        resumeMimeType: candidate.resumeMimeType,
+    };
 
     for (const recipient of allRecipients) {
         await emailService.sendRescheduleNotification({
@@ -134,6 +177,7 @@ async function sendRescheduleEmails(
             roundNumber: round.roundNumber,
             rescheduleUrl,
             meetingUrl,
+            resume,
         });
     }
 }
@@ -169,12 +213,14 @@ export const calendlyController = {
                     // Use the invitee_email API filter — this queries Calendly for events
                     // where the candidate is the actual booker (invitee), not a guest
                     const now = new Date();
-                    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
                     const thirtyDaysAhead = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
+                    // A pending interview is awaiting a NEW booking, so only match FUTURE
+                    // events. Matching past events caused interviews to be synced to
+                    // stale/past dates with expired reschedule URLs ("event is in the past").
                     const matchingEvents = await calendlyService.getAllScheduledEvents({
                         status: "active",
-                        minStartTime: thirtyDaysAgo.toISOString(),
+                        minStartTime: now.toISOString(),
                         maxStartTime: thirtyDaysAhead.toISOString(),
                     });
 

@@ -3,6 +3,26 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+function makeResumePdf(first: string, last: string): Uint8Array<ArrayBuffer> {
+  const body = `%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>
+endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>
+endobj
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R>>
+endobj
+4 0 obj<</Length 100>>
+stream
+BT /F1 18 Tf 72 720 Td (${first} ${last} - Resume) Tj ET
+endstream
+endobj
+xref
+0 5
+trailer<</Size 5/Root 1 0 R>>
+%%EOF`;
+  return new Uint8Array(Buffer.from(body, "utf8")) as Uint8Array<ArrayBuffer>;
+}
+
 async function main() {
   console.log('Starting seed...');
 
@@ -237,6 +257,8 @@ async function main() {
         currentPosition: 'Software Developer',
         skills: ['JavaScript', 'TypeScript', 'React', 'Node.js'],
         notes: 'Promising candidate with good technical skills',
+        resumeData: makeResumePdf(candidateNames[i].first, candidateNames[i].last),
+        resumeMimeType: 'application/pdf',
         createdBy: admin.id,
       },
     });
