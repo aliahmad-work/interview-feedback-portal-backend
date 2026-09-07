@@ -1,15 +1,25 @@
 import prisma from "../lib/prisma";
 import { Prisma } from "@prisma/client";
 
-export async function getCandidates(search?: string) {
-    const where: Prisma.CandidateWhereInput | undefined = search
-        ? {
-              OR: [
-                  { firstname: { contains: search, mode: Prisma.QueryMode.insensitive } },
-                  { lastname: { contains: search, mode: Prisma.QueryMode.insensitive } },
-                  { email: { contains: search, mode: Prisma.QueryMode.insensitive } }
-              ]
-          }
+export async function getCandidates(search?: string, status?: string) {
+    const conditions: Prisma.CandidateWhereInput[] = [];
+
+    if (search) {
+        conditions.push({
+            OR: [
+                { firstname: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                { lastname: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                { email: { contains: search, mode: Prisma.QueryMode.insensitive } }
+            ]
+        });
+    }
+
+    if (status && status !== 'all') {
+        conditions.push({ status });
+    }
+
+    const where: Prisma.CandidateWhereInput | undefined = conditions.length > 0
+        ? { AND: conditions }
         : undefined;
 
     const candidates = await prisma.candidate.findMany({
@@ -26,6 +36,19 @@ export async function getCandidates(search?: string) {
             currentPosition: true,
             skills: true,
             notes: true,
+            status: true,
+            aiMatchScore: true,
+            aiTier: true,
+            aiSummary: true,
+            aiStrengths: true,
+            aiGaps: true,
+            aiTargetPositionId: true,
+            aiTargetPosition: {
+                select: {
+                    id: true,
+                    title: true
+                }
+            },
             createdAt: true
         },
         orderBy: {
@@ -69,6 +92,13 @@ export async function createCandidate(data: {
     currentPosition?: string;
     skills?: string[];
     notes?: string;
+    status?: string;
+    aiMatchScore?: number | null;
+    aiTier?: string | null;
+    aiSummary?: string | null;
+    aiStrengths?: string[];
+    aiGaps?: string[];
+    aiTargetPositionId?: string | null;
     createdBy: string;
     resumeData?: Buffer | null;
     resumeMimeType?: string | null;
@@ -99,6 +129,13 @@ export async function createCandidate(data: {
             currentPosition: data.currentPosition || null,
             skills: data.skills || [],
             notes: data.notes || null,
+            status: data.status || "shortlisted",
+            aiMatchScore: data.aiMatchScore !== undefined ? data.aiMatchScore : null,
+            aiTier: data.aiTier || null,
+            aiSummary: data.aiSummary || null,
+            aiStrengths: data.aiStrengths || [],
+            aiGaps: data.aiGaps || [],
+            aiTargetPositionId: data.aiTargetPositionId || null,
             resumeData: data.resumeData ? new Uint8Array(data.resumeData) : null,
             resumeMimeType: data.resumeMimeType || null,
             createdBy: data.createdBy
@@ -114,7 +151,14 @@ export async function createCandidate(data: {
             currentCompany: true,
             currentPosition: true,
             skills: true,
-            notes: true
+            notes: true,
+            status: true,
+            aiMatchScore: true,
+            aiTier: true,
+            aiSummary: true,
+            aiStrengths: true,
+            aiGaps: true,
+            aiTargetPositionId: true
         }
     });
 
@@ -136,6 +180,22 @@ export async function getCandidateById(id: string) {
             currentPosition: true,
             skills: true,
             notes: true,
+            status: true,
+            aiMatchScore: true,
+            aiTier: true,
+            aiSummary: true,
+            aiStrengths: true,
+            aiGaps: true,
+            aiTargetPositionId: true,
+            aiTargetPosition: {
+                select: {
+                    id: true,
+                    title: true,
+                    requiredSkills: true,
+                    minimumExperience: true,
+                    description: true
+                }
+            },
             resumeMimeType: true,
             createdAt: true,
             updatedAt: true,
@@ -199,6 +259,7 @@ export async function getCandidateById(id: string) {
     };
 }
 
+
 export async function updateCandidate(id: string, data: {
     firstname?: string;
     lastname?: string;
@@ -209,6 +270,13 @@ export async function updateCandidate(id: string, data: {
     currentPosition?: string;
     skills?: string[];
     notes?: string;
+    status?: string;
+    aiMatchScore?: number | null;
+    aiTier?: string | null;
+    aiSummary?: string | null;
+    aiStrengths?: string[];
+    aiGaps?: string[];
+    aiTargetPositionId?: string | null;
     resumeData?: Buffer | null;
     resumeMimeType?: string | null;
 }) {
@@ -243,6 +311,13 @@ export async function updateCandidate(id: string, data: {
     if (data.currentPosition !== undefined) updateData.currentPosition = data.currentPosition || null;
     if (data.skills !== undefined) updateData.skills = data.skills;
     if (data.notes !== undefined) updateData.notes = data.notes || null;
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.aiMatchScore !== undefined) updateData.aiMatchScore = data.aiMatchScore;
+    if (data.aiTier !== undefined) updateData.aiTier = data.aiTier;
+    if (data.aiSummary !== undefined) updateData.aiSummary = data.aiSummary;
+    if (data.aiStrengths !== undefined) updateData.aiStrengths = data.aiStrengths;
+    if (data.aiGaps !== undefined) updateData.aiGaps = data.aiGaps;
+    if (data.aiTargetPositionId !== undefined) updateData.aiTargetPositionId = data.aiTargetPositionId;
     if (data.resumeData !== undefined) updateData.resumeData = data.resumeData ? new Uint8Array(data.resumeData) : null;
     if (data.resumeMimeType !== undefined) updateData.resumeMimeType = data.resumeMimeType || null;
 
@@ -261,11 +336,19 @@ export async function updateCandidate(id: string, data: {
             currentPosition: true,
             skills: true,
             notes: true,
+            status: true,
+            aiMatchScore: true,
+            aiTier: true,
+            aiSummary: true,
+            aiStrengths: true,
+            aiGaps: true,
+            aiTargetPositionId: true,
             resumeMimeType: true,
             createdAt: true,
             updatedAt: true
         }
     });
+
 
     return {
         ...candidate,

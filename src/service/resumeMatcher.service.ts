@@ -88,77 +88,87 @@ export async function processBatchResumes(params: {
             );
 
             const { candidateInfo, evaluation } = aiEvaluation;
+            const normalizedEmail = candidateInfo.email ? candidateInfo.email.trim().toLowerCase() : "";
+            const candidateStatus = evaluation.shortlisted ? "shortlisted" : "neglected";
 
-            // If matchScore >= 75 (Shortlisted), create or link Candidate profile in DB
-            if (evaluation.shortlisted) {
-                const normalizedEmail = candidateInfo.email.trim().toLowerCase();
+            // Check if candidate exists by email
+            const existingCandidate = normalizedEmail
+                ? await prisma.candidate.findUnique({ where: { email: normalizedEmail } })
+                : null;
 
-                // Check if candidate exists by email
-                const existingCandidate = normalizedEmail
-                    ? await prisma.candidate.findUnique({ where: { email: normalizedEmail } })
-                    : null;
+            if (existingCandidate) {
+                // Update existing candidate with latest AI evaluation and resume if applicable
+                await prisma.candidate.update({
+                    where: { id: existingCandidate.id },
+                    data: {
+                        status: candidateStatus,
+                        aiMatchScore: evaluation.matchScore,
+                        aiTier: evaluation.tier,
+                        aiSummary: evaluation.summary,
+                        aiStrengths: evaluation.strengths,
+                        aiGaps: evaluation.gaps,
+                        aiTargetPositionId: positionId,
+                        notes: `[AI Match Score: ${evaluation.matchScore}% - Tier: ${evaluation.tier} - Status: ${candidateStatus.toUpperCase()}]\n${evaluation.summary}\n${candidateInfo.notes || ""}`.trim()
+                    }
+                });
 
-                if (existingCandidate) {
-                    // Candidate already exists, return existing profile reference
-                    results.push({
-                        filename: file.originalname,
-                        mimetype: file.mimetype,
-                        candidateInfo,
-                        evaluation,
-                        candidateId: existingCandidate.id,
-                        candidateCode: existingCandidate.candidateCode,
-                        status: "EXISTING"
-                    });
-                    continue;
-                }
-
-                // Create new candidate
-                try {
-                    const createdCandidate = await candidateServices.createCandidate({
-                        firstname: candidateInfo.firstname,
-                        lastname: candidateInfo.lastname,
-                        email: normalizedEmail || `candidate_${Date.now()}_${i}@placeholder.com`,
-                        phone: candidateInfo.phone || "N/A",
-                        experience: candidateInfo.experience,
-                        currentCompany: candidateInfo.currentCompany,
-                        currentPosition: candidateInfo.currentPosition,
-                        skills: candidateInfo.skills,
-                        notes: `[AI Match Score: ${evaluation.matchScore}% - Tier: ${evaluation.tier}]\n${evaluation.summary}\n${candidateInfo.notes || ""}`.trim(),
-                        createdBy,
-                        resumeData: file.buffer,
-                        resumeMimeType: file.mimetype
-                    });
-
-                    results.push({
-                        filename: file.originalname,
-                        mimetype: file.mimetype,
-                        candidateInfo,
-                        evaluation,
-                        candidateId: createdCandidate.id,
-                        candidateCode: createdCandidate.candidateCode,
-                        status: "CREATED"
-                    });
-                } catch (dbErr: any) {
-                    console.error("Error creating candidate profile in DB:", dbErr);
-                    results.push({
-                        filename: file.originalname,
-                        mimetype: file.mimetype,
-                        candidateInfo,
-                        evaluation,
-                        status: "ERROR",
-                        errorMessage: dbErr.message || "Failed to persist shortlisted candidate to database"
-                    });
-                }
-            } else {
-                // Neglected (matchScore < 75), do not save profile
                 results.push({
                     filename: file.originalname,
                     mimetype: file.mimetype,
                     candidateInfo,
                     evaluation,
-                    status: "NEGLECTED"
+                    candidateId: existingCandidate.id,
+                    candidateCode: existingCandidate.candidateCode,
+                    status: "EXISTING"
+                });
+                continue;
+            }
+
+            // Create new candidate profile in database (for both shortlisted & neglected)
+            try {
+                const createdCandidate = await candidateServices.createCandidate({
+                    firstname: candidateInfo.firstname,
+                    lastname: candidateInfo.lastname,
+                    email: normalizedEmail || `candidate_${Date.now()}_${i}@placeholder.com`,
+                    phone: candidateInfo.phone || "N/A",
+                    experience: candidateInfo.experience,
+                    currentCompany: candidateInfo.currentCompany,
+                    currentPosition: candidateInfo.currentPosition,
+                    skills: candidateInfo.skills,
+                    status: candidateStatus,
+                    aiMatchScore: evaluation.matchScore,
+                    aiTier: evaluation.tier,
+                    aiSummary: evaluation.summary,
+                    aiStrengths: evaluation.strengths,
+                    aiGaps: evaluation.gaps,
+                    aiTargetPositionId: positionId,
+                    notes: `[AI Match Score: ${evaluation.matchScore}% - Tier: ${evaluation.tier} - Status: ${candidateStatus.toUpperCase()}]\n${evaluation.summary}\n${candidateInfo.notes || ""}`.trim(),
+                    createdBy,
+                    resumeData: file.buffer,
+                    resumeMimeType: file.mimetype
+                });
+
+                results.push({
+                    filename: file.originalname,
+                    mimetype: file.mimetype,
+                    candidateInfo,
+                    evaluation,
+                    candidateId: createdCandidate.id,
+                    candidateCode: createdCandidate.candidateCode,
+                    status: "CREATED"
+                });
+            } catch (dbErr: any) {
+                console.error("Error creating candidate profile in DB:", dbErr);
+                results.push({
+                    filename: file.originalname,
+                    mimetype: file.mimetype,
+                    candidateInfo,
+                    evaluation,
+                    status: "ERROR",
+                    errorMessage: dbErr.message || "Failed to persist candidate to database"
                 });
             }
+
         } catch (error: any) {
             console.error(`Error processing resume ${file.originalname}:`, error);
             results.push({

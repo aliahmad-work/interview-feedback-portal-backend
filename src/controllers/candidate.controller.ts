@@ -3,14 +3,16 @@ import * as candidateServices from "../service/candidate.service";
 
 export async function getCandidates(req: Request, res: Response) {
     const search = (req.query.search as string) || undefined;
+    const status = (req.query.status as string) || undefined;
 
-    const candidates = await candidateServices.getCandidates(search);
+    const candidates = await candidateServices.getCandidates(search, status);
 
     return res.json({
         candidates,
         count: candidates.length
     });
 }
+
 
 export async function createCandidate(req: Request, res: Response) {
     try {
