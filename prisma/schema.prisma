@@ -50,51 +50,63 @@ model User {
 }
 
 model Candidate {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  candidateCode   String   @unique
-  firstname       String
-  lastname        String
-  email           String   @unique
-  phone           String   @unique
-  experience      String?
-  currentCompany  String?
-  currentPosition String?
-  skills          String[]
-  notes           String?
-  resumeData      Bytes?
-  resumeMimeType  String?
-  createdBy       String   @db.ObjectId
-  creator         User     @relation(fields: [createdBy], references: [id])
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  interviews          Interview[]
-  interviewFeedbacks  InterviewFeedback[]
+  id                 String              @id @default(auto()) @map("_id") @db.ObjectId
+  candidateCode      String              @unique
+  firstname          String
+  lastname           String
+  email              String              @unique
+  phone              String              @unique
+  experience         String?
+  currentCompany     String?
+  currentPosition    String?
+  skills             String[]
+  notes              String?
+  status             String              @default("shortlisted") // "shortlisted" | "neglected" | "manual"
+  aiMatchScore       Int?
+  aiTier             String?             // "TIER_1_TOP" | "TIER_2_STRONG" | "TIER_3_GOOD" | "NEGLECTED"
+  aiSummary          String?
+  aiStrengths        String[]            @default([])
+  aiGaps             String[]            @default([])
+  aiTargetPositionId String?             @db.ObjectId
+  aiTargetPosition   JobPositions?       @relation("CandidateAIEvaluatedPosition", fields: [aiTargetPositionId], references: [id])
+  resumeData         Bytes?
+  resumeMimeType     String?
+  createdBy          String              @db.ObjectId
+  creator            User                @relation(fields: [createdBy], references: [id])
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  interviews         Interview[]
+  interviewFeedbacks InterviewFeedback[]
 
-  @@index ([createdBy])
+  @@index([createdBy])
+  @@index([status])
+  @@index([aiTier])
 }
 
 model JobPositions {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  title             String
-  requiredSkills    String[]
-  minimumExperience Int
-  maximumExperience Int?
-  description       String
-  status            String    @default("open")
-  openings          Int       @default(1)
-  closedAt          DateTime?
-  closeReason       String?
-  departmentId      String    @db.ObjectId
-  department        Department @relation(fields: [departmentId], references: [id])
-  createdBy         String    @db.ObjectId
-  creator           User      @relation(fields: [createdBy], references:[id])
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  interviews        Interview[]
+  id                    String      @id @default(auto()) @map("_id") @db.ObjectId
+  title                 String
+  requiredSkills        String[]
+  minimumExperience     Int
+  maximumExperience     Int?
+  description           String
+  status                String      @default("open")
+  openings              Int         @default(1)
+  closedAt              DateTime?
+  closeReason           String?
+  departmentId          String      @db.ObjectId
+  department            Department  @relation(fields: [departmentId], references: [id])
+  createdBy             String      @db.ObjectId
+  creator               User        @relation(fields: [createdBy], references: [id])
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  interviews            Interview[]
+  aiEvaluatedCandidates Candidate[] @relation("CandidateAIEvaluatedPosition")
 
   @@index([createdBy])
   @@index([departmentId])
 }
+
 
 model Interview {
   id                   String        @id @default(auto()) @map("_id") @db.ObjectId
