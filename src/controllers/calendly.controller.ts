@@ -74,7 +74,7 @@ async function sendConfirmationEmails(interview: any, round: any, event?: any) {
         .map((i: any) => `${i.firstname} ${i.lastname}`)
         .join(", ");
 
-    // Candidate CV (stored as binary in the DB) to attach to scheduling/confirmation emails
+    // Candidate CV (stored as binary in the DB) to attach to interviewer confirmation emails
     const resume = {
         candidateFirstname: candidate.firstname,
         candidateLastname: candidate.lastname,
@@ -92,10 +92,9 @@ async function sendConfirmationEmails(interview: any, round: any, event?: any) {
         duration,
         roundNumber: round.roundNumber,
         meetingUrl,
-        resume,
     });
 
-    // Send to interviewers assigned to THIS round only
+    // Send to interviewers assigned to THIS round only (with candidate's resume attached)
     for (const interviewer of roundInterviewers) {
         await emailService.sendConfirmationToInterviewer({
             interviewerEmail: interviewer.email,
@@ -124,7 +123,6 @@ async function sendConfirmationEmails(interview: any, round: any, event?: any) {
         roundNumber: round.roundNumber,
         interviewerNames,
         meetingUrl,
-        resume,
     });
 }
 
@@ -156,14 +154,6 @@ async function sendRescheduleEmails(
         })),
     ];
 
-    // Candidate CV (stored as binary in the DB) to attach to reschedule notifications
-    const resume = {
-        candidateFirstname: candidate.firstname,
-        candidateLastname: candidate.lastname,
-        resumeData: candidate.resumeData,
-        resumeMimeType: candidate.resumeMimeType,
-    };
-
     for (const recipient of allRecipients) {
         await emailService.sendRescheduleNotification({
             recipientEmail: recipient.email,
@@ -177,7 +167,6 @@ async function sendRescheduleEmails(
             roundNumber: round.roundNumber,
             rescheduleUrl,
             meetingUrl,
-            resume,
         });
     }
 }
