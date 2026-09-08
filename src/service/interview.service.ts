@@ -168,7 +168,7 @@ export async function createInterview(data: {
             return results;
         });
 
-        // Send scheduling email to candidate with CV attached
+        // Send scheduling email to candidate
         try {
             await emailService.sendScheduleToCandidate({
                 candidateEmail: candidate.email,
@@ -176,12 +176,6 @@ export async function createInterview(data: {
                 positionName: position.title,
                 roundNumber: 1,
                 schedulingUrl,
-                resume: {
-                    candidateFirstname: candidate.firstname,
-                    candidateLastname: candidate.lastname,
-                    resumeData: candidate.resumeData,
-                    resumeMimeType: candidate.resumeMimeType,
-                },
             });
         } catch (emailError: any) {
             console.error("[Email] FAILED to send scheduling email to candidate:", candidate.email);
@@ -629,12 +623,6 @@ export async function updateInterviewDecision(interviewId: string, decision: str
                         positionName: interview.position.title,
                         roundNumber: nextRoundNumber,
                         schedulingUrl,
-                        resume: {
-                            candidateFirstname: interview.candidate.firstname,
-                            candidateLastname: interview.candidate.lastname,
-                            resumeData: interview.candidate.resumeData,
-                            resumeMimeType: interview.candidate.resumeMimeType,
-                        },
                     });
                 } catch (emailError: any) {
                     console.error("[Email] FAILED to send scheduling email for next round:", emailError.message || emailError);
@@ -664,12 +652,6 @@ export async function updateInterviewDecision(interviewId: string, decision: str
                             positionName: interview.position.title,
                             roundNumber: existingNextRound.roundNumber,
                             schedulingUrl,
-                            resume: {
-                                candidateFirstname: interview.candidate.firstname,
-                                candidateLastname: interview.candidate.lastname,
-                                resumeData: interview.candidate.resumeData,
-                                resumeMimeType: interview.candidate.resumeMimeType,
-                            },
                         });
                     } catch (emailError: any) {
                         console.error("[Email] FAILED to send scheduling email:", emailError.message || emailError);

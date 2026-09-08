@@ -137,7 +137,6 @@ export const emailService = {
         positionName: string;
         roundNumber: number;
         schedulingUrl: string;
-        resume?: ResumeAttachmentInput;
     }) {
         const template = loadTemplate("schedule-candidate.html");
         const html = replaceTemplateVars(template, {
@@ -147,15 +146,10 @@ export const emailService = {
             schedulingUrl: params.schedulingUrl,
         });
 
-        const attachments = params.resume
-            ? [buildResumeAttachment(params.resume)].filter((a): a is EmailAttachment => !!a)
-            : undefined;
-
         return sendEmail(
             params.candidateEmail,
             `Please select your interview time - ${params.positionName}`,
-            html,
-            attachments
+            html
         );
     },
 
@@ -235,7 +229,6 @@ export const emailService = {
         roundNumber: number;
         interviewerNames: string;
         meetingUrl?: string;
-        resume?: ResumeAttachmentInput;
     }) {
         const template = loadTemplate("confirmation-admin.html");
         const meetingLinkRow = params.meetingUrl
@@ -259,15 +252,10 @@ export const emailService = {
             meetingLinkRow,
         });
 
-        const attachments = params.resume
-            ? [buildResumeAttachment(params.resume)].filter((a): a is EmailAttachment => !!a)
-            : undefined;
-
         return sendEmail(
             params.adminEmail,
             `Interview Scheduled - ${params.positionName} | ${params.date} at ${params.time}`,
-            html,
-            attachments
+            html
         );
     },
 
@@ -280,7 +268,6 @@ export const emailService = {
         duration: number;
         roundNumber: number;
         meetingUrl?: string;
-        resume?: ResumeAttachmentInput;
     }) {
         const template = loadTemplate("confirmation-candidate.html");
         const meetingLinkSection = params.meetingUrl
@@ -310,15 +297,10 @@ export const emailService = {
             meetingLinkSection,
         });
 
-        const attachments = params.resume
-            ? [buildResumeAttachment(params.resume)].filter((a): a is EmailAttachment => !!a)
-            : undefined;
-
         return sendEmail(
             params.candidateEmail,
             `Interview Confirmed - ${params.positionName} | ${params.date} at ${params.time}`,
-            html,
-            attachments
+            html
         );
     },
 
@@ -334,7 +316,6 @@ export const emailService = {
         roundNumber: number;
         rescheduleUrl?: string;
         meetingUrl?: string;
-        resume?: ResumeAttachmentInput;
     }) {
         const template = loadTemplate("reschedule-notification.html");
         const meetingLinkSection = params.meetingUrl
@@ -377,15 +358,10 @@ export const emailService = {
             meetingLinkSection,
         });
 
-        const attachments = params.resume
-            ? [buildResumeAttachment(params.resume)].filter((a): a is EmailAttachment => !!a)
-            : undefined;
-
         return sendEmail(
             params.recipientEmail,
             `Interview Rescheduled - ${params.positionName} | New: ${params.newDate} at ${params.newTime}`,
-            html,
-            attachments
+            html
         );
     },
 
