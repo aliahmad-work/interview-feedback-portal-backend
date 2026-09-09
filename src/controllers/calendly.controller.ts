@@ -362,96 +362,91 @@ export const calendlyController = {
                     );
                     const candidateEmail = interview.candidate.email.toLowerCase();
 
-                    // Compute time window based on the stored start/end time
-                    const timeWindowStart = interview.startTime
-                        ? new Date(new Date(interview.startTime).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
-                        : undefined;
-                    const timeWindowEnd = interview.endTime
-                        ? new Date(new Date(interview.endTime).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
-                        : undefined;
-
-                    // Step 1: Try to find the event in active events (same URI)
+                    // Step 1: Check the current event directly
                     let matchingEvent: CalendlyScheduledEvent | null = null;
                     let isNewEvent = false;
+                    let storedEvent: CalendlyScheduledEvent | null = null;
+
                     try {
-                        const activeEvents = await calendlyService.getAllScheduledEvents({
-                            status: "active",
-                            minStartTime: timeWindowStart,
-                            maxStartTime: timeWindowEnd,
-                        });
-                        matchingEvent = activeEvents.find(
-                            (e) => calendlyService.extractUuidFromUri(e.uri) === calendlyEventUuid
-                        ) || null;
+                        storedEvent = await calendlyService.getScheduledEvent(calendlyEventUuid);
                     } catch (fetchError: any) {
-                        console.error(`[Calendly Sync] Failed to fetch active events for interview ${interview.id}:`, fetchError.message);
-                        continue;
+                        console.error(`[Calendly Sync] Failed to fetch stored event ${calendlyEventUuid} for interview ${interview.id}:`, fetchError.message);
                     }
 
-                    // Step 2: If not found in active events, the event may have been
-                    // replaced by Calendly (reschedule creates a new event, cancels old).
-                    // Check for a canceled event matching our stored URI.
-                    if (!matchingEvent) {
-                        console.log(`[Calendly Sync] Event ${calendlyEventUuid} not found in active events for interview ${interview.id}, checking for canceled events...`);
+                    if (storedEvent && storedEvent.status === "active") {
+                        matchingEvent = storedEvent;
+                    } else if (storedEvent && storedEvent.status === "canceled") {
+                        console.log(`[Calendly Sync] Stored event ${calendlyEventUuid} is canceled for interview ${interview.id} — checking for reschedule...`);
+
+                        // Strategy 1 (Preferred): Use Calendly's native invitee linkage (old_invitee → new_invitee)
                         try {
-                            const canceledEvents = await calendlyService.getAllScheduledEvents({
-                                status: "canceled",
-                                minStartTime: timeWindowStart,
-                                maxStartTime: timeWindowEnd,
-                            });
-                            const canceledEvent = canceledEvents.find(
-                                (e) => calendlyService.extractUuidFromUri(e.uri) === calendlyEventUuid
-                            );
+                            const canceledInvitees = await calendlyService.getEventInviteesAll(calendlyEventUuid, "canceled");
+                            const rescheduledInvitee = canceledInvitees.find(
+                                (inv) => inv.email.toLowerCase() === candidateEmail && inv.new_invitee
+                            ) || canceledInvitees.find((inv) => inv.new_invitee);
 
-                            if (canceledEvent) {
-                                console.log(`[Calendly Sync] Found canceled event ${calendlyEventUuid} — interview was rescheduled, searching for new event...`);
+                            if (rescheduledInvitee?.new_invitee) {
+                                console.log(`[Calendly Sync] Found rescheduled invitee linkage for interview ${interview.id}, extracting new event...`);
+                                // new_invitee URI format: https://api.calendly.com/scheduled_events/{eventUuid}/invitees/{inviteeUuid}
+                                const newInviteeParts = rescheduledInvitee.new_invitee.split("/");
+                                const newEventUuid = newInviteeParts[newInviteeParts.indexOf("scheduled_events") + 1];
 
-                                // Strategy 1: Use Calendly's invitee_email filter
-                                const candidateEvents = await calendlyService.getAllScheduledEvents({
-                                    status: "active",
-                                    inviteeEmail: interview.candidate.email.toLowerCase(),
-                                });
-
-                                if (candidateEvents.length > 0) {
-                                    matchingEvent = candidateEvents[0];
-                                    isNewEvent = true;
-                                    console.log(`[Calendly Sync] Found replacement event ${matchingEvent.uri} via invitee_email filter`);
-                                }
-
-                                // Strategy 2: Use Calendly's native invitee linkage (old_invitee → new_invitee)
-                                if (!matchingEvent) {
+                                if (newEventUuid) {
                                     try {
-                                        const canceledInvitees = await calendlyService.getEventInviteesAll(calendlyEventUuid, "canceled");
-                                        const rescheduledInvitee = canceledInvitees.find(
-                                            (inv) => inv.email.toLowerCase() === candidateEmail && inv.new_invitee
-                                        );
-
-                                        if (rescheduledInvitee?.new_invitee) {
-                                            console.log(`[Calendly Sync] Found rescheduled invitee linkage, extracting new event...`);
-                                            // new_invitee URI format: https://api.calendly.com/scheduled_events/{eventUuid}/invitees/{inviteeUuid}
-                                            const newInviteeParts = rescheduledInvitee.new_invitee.split("/");
-                                            const newEventUuid = newInviteeParts[newInviteeParts.indexOf("scheduled_events") + 1];
-
-                                            if (newEventUuid) {
-                                                // Fetch the new event
-                                                const newEvents = await calendlyService.getAllScheduledEvents({
-                                                    status: "active",
-                                                });
-                                                matchingEvent = newEvents.find(
-                                                    (e) => calendlyService.extractUuidFromUri(e.uri) === newEventUuid
-                                                ) || null;
-                                                if (matchingEvent) {
-                                                    isNewEvent = true;
-                                                    console.log(`[Calendly Sync] Found replacement event ${matchingEvent.uri} via invitee linkage`);
-                                                }
-                                            }
+                                        const newEvent = await calendlyService.getScheduledEvent(newEventUuid);
+                                        if (newEvent && newEvent.status === "active") {
+                                            matchingEvent = newEvent;
+                                            isNewEvent = true;
+                                            console.log(`[Calendly Sync] Found replacement event ${matchingEvent.uri} via native invitee linkage`);
                                         }
-                                    } catch (linkageError: any) {
-                                        console.error(`[Calendly Sync] Failed to use invitee linkage:`, linkageError.message);
+                                    } catch (fetchNewErr: any) {
+                                        console.error(`[Calendly Sync] Failed to fetch replacement event ${newEventUuid}:`, fetchNewErr.message);
                                     }
                                 }
                             }
-                        } catch (canceledError: any) {
-                            console.error(`[Calendly Sync] Failed to fetch canceled events for interview ${interview.id}:`, canceledError.message);
+                        } catch (linkageError: any) {
+                            console.error(`[Calendly Sync] Failed to use invitee linkage:`, linkageError.message);
+                        }
+
+                        // Strategy 2 (Fallback): Look for future active events for this candidate
+                        if (!matchingEvent) {
+                            try {
+                                const now = new Date();
+                                const candidateEvents = await calendlyService.getAllScheduledEvents({
+                                    status: "active",
+                                    inviteeEmail: interview.candidate.email.toLowerCase(),
+                                    minStartTime: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+                                });
+
+                                if (candidateEvents.length > 0) {
+                                    // Sort by updated_at / created_at descending so the most recently updated event is selected
+                                    candidateEvents.sort(
+                                        (a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+                                    );
+                                    const latestEvent = candidateEvents.find(
+                                        (e) => calendlyService.extractUuidFromUri(e.uri) !== calendlyEventUuid
+                                    );
+                                    if (latestEvent) {
+                                        matchingEvent = latestEvent;
+                                        isNewEvent = true;
+                                        console.log(`[Calendly Sync] Found replacement event ${matchingEvent.uri} via future invitee_email fallback`);
+                                    }
+                                }
+                            } catch (candErr: any) {
+                                console.error(`[Calendly Sync] Failed to query candidate events:`, candErr.message);
+                            }
+                        }
+                    } else if (!storedEvent) {
+                        // In case direct lookup failed, fallback to searching active events
+                        try {
+                            const activeEvents = await calendlyService.getAllScheduledEvents({
+                                status: "active",
+                            });
+                            matchingEvent = activeEvents.find(
+                                (e) => calendlyService.extractUuidFromUri(e.uri) === calendlyEventUuid
+                            ) || null;
+                        } catch (fetchError: any) {
+                            console.error(`[Calendly Sync] Failed to fallback search active events:`, fetchError.message);
                             continue;
                         }
                     }

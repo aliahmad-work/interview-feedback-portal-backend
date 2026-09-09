@@ -120,6 +120,13 @@ export const calendlyService = {
         return response.data.collection;
     },
 
+    async getScheduledEvent(eventUuid: string): Promise<CalendlyScheduledEvent> {
+        const response = await axios.get(`${CALENDLY_API}/scheduled_events/${eventUuid}`, {
+            headers: getHeaders(),
+        });
+        return response.data.resource;
+    },
+
     async getScheduledEvents(params: {
         userUri?: string;
         orgUri?: string;
