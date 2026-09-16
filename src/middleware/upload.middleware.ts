@@ -25,5 +25,5 @@ export const uploadMultipleResumes = multer({
     storage,
     limits: { fileSize: 15 * 1024 * 1024 }, // 15MB per file limit
     fileFilter
-}).array("resumes", 30); // Accept up to 30 resumes in a batch
+}).array("resumes", 10); // Accept up to 10 resumes in a batch
 

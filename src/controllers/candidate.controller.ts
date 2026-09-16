@@ -138,6 +138,10 @@ export async function bulkUploadAndMatchResumes(req: Request, res: Response) {
             return res.status(400).json({ message: "Please upload at least one resume file" });
         }
 
+        if (files.length > 10) {
+            return res.status(400).json({ message: "You can upload a maximum of 10 resumes per batch" });
+        }
+
         const { processBatchResumes } = await import("../service/resumeMatcher.service");
 
         const result = await processBatchResumes({
