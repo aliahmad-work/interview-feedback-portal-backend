@@ -1,4 +1,5 @@
 import prisma from "../lib/prisma";
+import { emailService } from "./email.service";
 
 interface SubmitFeedbackData {
   interviewId: string;
@@ -11,16 +12,124 @@ interface SubmitFeedbackData {
   additionalComments: string;
 }
 
+async function notifyAdminFeedbackSubmitted(params: {
+  interview: any;
+  round?: any;
+  totalRounds?: number;
+  isFinalRound?: boolean;
+  interviewerId: string;
+  rating: number;
+  recommendation: string;
+  positiveComments: string;
+  negativeComments: string;
+  additionalComments?: string;
+}) {
+  try {
+    const interviewer = await prisma.user.findUnique({
+      where: { id: params.interviewerId },
+      select: { firstname: true, lastname: true, email: true }
+    });
+
+    const interviewerName = interviewer
+      ? `${interviewer.firstname} ${interviewer.lastname}`.trim()
+      : "Interviewer";
+
+    const candidateName = params.interview.candidate
+      ? `${params.interview.candidate.firstname} ${params.interview.candidate.lastname}`.trim()
+      : "Candidate";
+
+    const positionName = params.interview.position?.title || "Job Position";
+
+    let roundInfo = "General Interview";
+    if (params.round) {
+      const totalStr = params.totalRounds ? ` of ${params.totalRounds}` : "";
+      const typeStr = params.round.type ? ` (${params.round.type})` : "";
+      const finalStr = params.isFinalRound ? " - Final Round" : "";
+      roundInfo = `Round ${params.round.roundNumber}${totalStr}${typeStr}${finalStr}`;
+    } else if (params.interview.round) {
+      roundInfo = `Round ${params.interview.round}${params.interview.type ? ` (${params.interview.type})` : ""}${params.isFinalRound ? " - Final Round" : ""}`;
+    }
+
+    const submittedDate = new Date().toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
+    let adminRecipients: { email: string; name: string }[] = [];
+
+    if (params.interview.creator?.email) {
+      adminRecipients.push({
+        email: params.interview.creator.email,
+        name: `${params.interview.creator.firstname || "Admin"} ${params.interview.creator.lastname || ""}`.trim()
+      });
+    } else {
+      const adminUsers = await prisma.user.findMany({
+        where: { role: { name: "admin" } },
+        select: { email: true, firstname: true, lastname: true }
+      });
+      adminRecipients = adminUsers.map((u) => ({
+        email: u.email,
+        name: `${u.firstname} ${u.lastname}`.trim()
+      }));
+    }
+
+    for (const admin of adminRecipients) {
+      await emailService.sendFeedbackSubmittedToAdmin({
+        adminEmail: admin.email,
+        adminName: admin.name,
+        candidateName,
+        positionName,
+        roundInfo,
+        interviewerName,
+        rating: params.rating,
+        recommendation: params.recommendation,
+        positiveComments: params.positiveComments,
+        negativeComments: params.negativeComments,
+        additionalComments: params.additionalComments,
+        submittedDate,
+        isFinalRound: params.isFinalRound,
+      });
+      console.log(`[Feedback Notification] Email sent to admin (${admin.email}) for interview ${params.interview.id} [Final Round: ${Boolean(params.isFinalRound)}]`);
+    }
+  } catch (err: any) {
+    console.error("[Feedback Notification] Failed to send feedback notification email to admin:", err?.message || err);
+  }
+}
+
 export async function submitFeedback(data: SubmitFeedbackData) {
   const interview = await prisma.interview.findUnique({
     where: { id: data.interviewId },
-    select: {
-      id: true,
-      candidateId: true,
-      interviewerIds: true,
-      status: true,
+    include: {
+      candidate: {
+        select: {
+          id: true,
+          firstname: true,
+          lastname: true,
+          email: true
+        }
+      },
+      position: {
+        select: {
+          id: true,
+          title: true
+        }
+      },
+      creator: {
+        select: {
+          id: true,
+          firstname: true,
+          lastname: true,
+          email: true
+        }
+      },
       rounds: {
-        select: { id: true }
+        select: {
+          id: true,
+          roundNumber: true,
+          type: true,
+          interviewerIds: true,
+          status: true
+        }
       }
     }
   });
@@ -40,17 +149,7 @@ export async function submitFeedback(data: SubmitFeedbackData) {
   }
 
   if (hasRounds && data.roundId) {
-    const round = await prisma.interviewRound.findFirst({
-      where: {
-        id: data.roundId,
-        interviewId: data.interviewId
-      },
-      select: {
-        id: true,
-        interviewerIds: true,
-        status: true
-      }
-    });
+    const round = interview.rounds.find((r) => r.id === data.roundId);
 
     if (!round) {
       throw { status: 404, message: "Round not found" };
@@ -118,7 +217,11 @@ export async function submitFeedback(data: SubmitFeedbackData) {
         }
       });
 
+      let isRoundCompleted = false;
+      let isAllRoundsCompleted = false;
+
       if (submittedCount >= round.interviewerIds.length) {
+        isRoundCompleted = true;
         await tx.interviewRound.update({
           where: { id: data.roundId! },
           data: { status: "completed" }
@@ -131,6 +234,10 @@ export async function submitFeedback(data: SubmitFeedbackData) {
           }
         });
 
+        if (remainingActiveRounds === 0) {
+          isAllRoundsCompleted = true;
+        }
+
         await tx.interview.update({
           where: { id: data.interviewId },
           data: remainingActiveRounds === 0
@@ -139,10 +246,27 @@ export async function submitFeedback(data: SubmitFeedbackData) {
         });
       }
 
-      return feedback;
+      return { feedback, isRoundCompleted, isAllRoundsCompleted };
     });
 
-    return result;
+    // Determine if this was the final round of the series
+    const isFinalRound = result.isAllRoundsCompleted || (round.roundNumber === interview.rounds.length && result.isRoundCompleted);
+
+    // Notify admin via email
+    notifyAdminFeedbackSubmitted({
+      interview,
+      round,
+      totalRounds: interview.rounds.length,
+      isFinalRound,
+      interviewerId: data.interviewerId,
+      rating: data.rating,
+      recommendation: data.recommendation,
+      positiveComments: data.positiveComments,
+      negativeComments: data.negativeComments,
+      additionalComments: data.additionalComments
+    });
+
+    return result.feedback;
   }
 
   if (!interview.interviewerIds.includes(data.interviewerId)) {
@@ -194,6 +318,19 @@ export async function submitFeedback(data: SubmitFeedbackData) {
     });
 
     return feedback;
+  });
+
+  // Single-round interviews are immediately complete
+  notifyAdminFeedbackSubmitted({
+    interview,
+    totalRounds: 1,
+    isFinalRound: true,
+    interviewerId: data.interviewerId,
+    rating: data.rating,
+    recommendation: data.recommendation,
+    positiveComments: data.positiveComments,
+    negativeComments: data.negativeComments,
+    additionalComments: data.additionalComments
   });
 
   return result;

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;padding:40px 20px;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                    <tr>
+                        <td style="background-color:{{headerBgColor}};padding:30px 40px;text-align:center;">
+                            <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:600;">{{headerTitle}}</h1>
+                            {{headerSubtitle}}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:40px;">
+                            <h2 style="color:#1f2937;margin:0 0 16px;font-size:20px;">Hello {{adminName}},</h2>
+                            <p style="color:#4b5563;line-height:1.6;margin:0 0 20px;font-size:15px;">
+                                <strong>{{interviewerName}}</strong> has submitted feedback for candidate <strong>{{candidateName}}</strong>.
+                            </p>
+
+                            <!-- Final Round Completion Banner (if applicable) -->
+                            {{finalRoundBanner}}
+
+                            <!-- Summary Card -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;margin:0 0 24px;">
+                                <tr>
+                                    <td style="padding:20px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td style="padding:6px 0;color:#64748b;font-size:13px;width:140px;font-weight:600;">Candidate:</td>
+                                                <td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:600;">{{candidateName}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:6px 0;color:#64748b;font-size:13px;font-weight:600;">Position:</td>
+                                                <td style="padding:6px 0;color:#0f172a;font-size:14px;">{{positionName}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:6px 0;color:#64748b;font-size:13px;font-weight:600;">Interview Round:</td>
+                                                <td style="padding:6px 0;color:#0f172a;font-size:14px;">{{roundInfo}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:6px 0;color:#64748b;font-size:13px;font-weight:600;">Interview Status:</td>
+                                                <td style="padding:6px 0;">{{interviewStatusBadge}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:6px 0;color:#64748b;font-size:13px;font-weight:600;">Interviewer:</td>
+                                                <td style="padding:6px 0;color:#0f172a;font-size:14px;">{{interviewerName}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:6px 0;color:#64748b;font-size:13px;font-weight:600;">Submitted At:</td>
+                                                <td style="padding:6px 0;color:#0f172a;font-size:14px;">{{submittedDate}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:6px 0;color:#64748b;font-size:13px;font-weight:600;">Rating:</td>
+                                                <td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:600;">{{ratingDisplay}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:6px 0;color:#64748b;font-size:13px;font-weight:600;">Recommendation:</td>
+                                                <td style="padding:6px 0;">{{recommendationBadge}}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Feedback Details -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+                                <tr>
+                                    <td style="padding:0 0 16px 0;">
+                                        <div style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-left:4px solid #16a34a;border-radius:4px;padding:16px;">
+                                            <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.5px;">Positive Feedback / Strengths</p>
+                                            <p style="margin:0;font-size:14px;color:#166534;line-height:1.6;white-space:pre-wrap;">{{positiveComments}}</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:0 0 16px 0;">
+                                        <div style="background-color:#fff1f2;border:1px solid #fecdd3;border-left:4px solid #e11d48;border-radius:4px;padding:16px;">
+                                            <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#be123c;text-transform:uppercase;letter-spacing:0.5px;">Areas for Improvement / Concerns</p>
+                                            <p style="margin:0;font-size:14px;color:#9f1239;line-height:1.6;white-space:pre-wrap;">{{negativeComments}}</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {{additionalCommentsSection}}
+                            </table>
+
+                            <!-- Action / Next Steps Section -->
+                            {{actionSection}}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background-color:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;">
+                            <p style="color:#9ca3af;margin:0;font-size:12px;text-align:center;">
+                                This is an automated email from the Interview Portal. Please do not reply directly to this message.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
