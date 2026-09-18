@@ -365,6 +365,138 @@ export const emailService = {
         );
     },
 
+    async sendFeedbackSubmittedToAdmin(params: {
+        adminEmail: string;
+        adminName: string;
+        candidateName: string;
+        positionName: string;
+        roundInfo: string;
+        interviewerName: string;
+        rating: number;
+        recommendation: string;
+        positiveComments: string;
+        negativeComments: string;
+        additionalComments?: string;
+        submittedDate: string;
+        isFinalRound?: boolean;
+    }) {
+        const template = loadTemplate("feedback-submitted-admin.html");
+
+        // Format recommendation badge
+        const rec = params.recommendation.toLowerCase();
+        let badgeBg = "#eff6ff";
+        let badgeColor = "#1e40af";
+        let badgeBorder = "#bfdbfe";
+
+        if (rec.includes("strong hire") || rec === "hire" || rec.includes("hire")) {
+            badgeBg = "#ecfdf5";
+            badgeColor = "#065f46";
+            badgeBorder = "#a7f3d0";
+        } else if (rec.includes("reject") || rec.includes("no hire")) {
+            badgeBg = "#fff1f2";
+            badgeColor = "#9f1239";
+            badgeBorder = "#fecdd3";
+        } else if (rec.includes("hold")) {
+            badgeBg = "#fffbeb";
+            badgeColor = "#92400e";
+            badgeBorder = "#fde68a";
+        }
+
+        const recommendationBadge = `<span style="display:inline-block;padding:4px 12px;background-color:${badgeBg};color:${badgeColor};border:1px solid ${badgeBorder};border-radius:9999px;font-size:13px;font-weight:600;">${params.recommendation}</span>`;
+
+        // Format rating display with stars
+        const filledStars = Math.max(0, Math.min(5, Math.round(params.rating)));
+        const stars = "★".repeat(filledStars) + "☆".repeat(5 - filledStars);
+        const ratingDisplay = `<span style="color:#f59e0b;font-size:16px;letter-spacing:1px;margin-right:6px;">${stars}</span><span style="font-weight:600;color:#334155;">(${params.rating}/5)</span>`;
+
+        // Format additional comments section if present
+        const additionalCommentsSection = params.additionalComments && params.additionalComments.trim()
+            ? `<tr>
+                <td style="padding:0;">
+                    <div style="background-color:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #64748b;border-radius:4px;padding:16px;">
+                        <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;">Additional Notes</p>
+                        <p style="margin:0;font-size:14px;color:#334155;line-height:1.6;white-space:pre-wrap;">${params.additionalComments}</p>
+                    </div>
+                </td>
+               </tr>`
+            : "";
+
+        const isFinal = Boolean(params.isFinalRound);
+
+        const headerBgColor = isFinal ? "#4338ca" : "#4f46e5";
+        const headerTitle = isFinal
+            ? "Final Interview Feedback Submitted"
+            : "Interview Feedback Submitted";
+        const headerSubtitle = isFinal
+            ? `<div style="margin-top:8px;"><span style="display:inline-block;background-color:rgba(255,255,255,0.2);color:#ffffff;font-size:12px;font-weight:600;padding:4px 12px;border-radius:9999px;">All Rounds Completed • Final Decision Ready</span></div>`
+            : "";
+
+        const finalRoundBanner = isFinal
+            ? `<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ecfdf5;border:1px solid #6ee7b7;border-left:4px solid #059669;border-radius:6px;margin:0 0 24px;">
+                <tr>
+                    <td style="padding:16px 20px;">
+                        <span style="display:inline-block;background-color:#059669;color:#ffffff;font-size:11px;font-weight:700;letter-spacing:0.5px;padding:2px 8px;border-radius:4px;text-transform:uppercase;margin-bottom:6px;">Final Round Completed</span>
+                        <h3 style="margin:4px 0 6px;color:#065f46;font-size:15px;font-weight:700;">All Interview Rounds Finished</h3>
+                        <p style="margin:0;color:#047857;font-size:13px;line-height:1.5;">
+                            All evaluation rounds for <strong>${params.candidateName}</strong> are now complete. The candidate is ready for your final hiring decision (<strong>Hire</strong>, <strong>Reject</strong>, or <strong>Hold</strong>).
+                        </p>
+                    </td>
+                </tr>
+               </table>`
+            : "";
+
+        const interviewStatusBadge = isFinal
+            ? `<span style="display:inline-block;padding:3px 10px;background-color:#dcfce7;color:#15803d;border:1px solid #86efac;border-radius:9999px;font-size:12px;font-weight:600;">Series Complete — Pending Decision</span>`
+            : `<span style="display:inline-block;padding:3px 10px;background-color:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:9999px;font-size:12px;font-weight:600;">In Progress</span>`;
+
+        const actionSection = isFinal
+            ? `<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;margin:24px 0 0;padding:20px;text-align:center;">
+                <tr>
+                    <td align="center">
+                        <h3 style="margin:0 0 6px;font-size:15px;color:#1e293b;font-weight:600;">Next Step: Submit Final Decision</h3>
+                        <p style="margin:0 0 16px;color:#64748b;font-size:13px;line-height:1.5;">
+                            Review all evaluations and submit your final decision for this candidate from the Admin Portal.
+                        </p>
+                        <table cellpadding="0" cellspacing="0" align="center">
+                            <tr>
+                                <td style="background-color:#4f46e5;border-radius:6px;padding:10px 20px;">
+                                    <span style="color:#ffffff;font-size:13px;font-weight:600;">Ready for Final Admin Review</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+               </table>`
+            : `<p style="color:#6b7280;line-height:1.6;margin:24px 0 0;font-size:14px;">
+                You can view full interview details and track progress from your Admin Dashboard.
+               </p>`;
+
+        const subjectPrefix = isFinal ? "[All Rounds Completed] " : "";
+        const subject = `${subjectPrefix}Interview Feedback Submitted: ${params.candidateName} - ${params.positionName} (${params.roundInfo})`;
+
+        const html = replaceTemplateVars(template, {
+            headerBgColor,
+            headerTitle,
+            headerSubtitle,
+            finalRoundBanner,
+            adminName: params.adminName,
+            candidateName: params.candidateName,
+            positionName: params.positionName,
+            roundInfo: params.roundInfo,
+            interviewStatusBadge,
+            interviewerName: params.interviewerName,
+            submittedDate: params.submittedDate,
+            ratingDisplay,
+            recommendationBadge,
+            positiveComments: params.positiveComments,
+            negativeComments: params.negativeComments,
+            additionalCommentsSection,
+            actionSection,
+        });
+
+        return sendEmail(params.adminEmail, subject, html);
+    },
+
     async sendTestEmail(to: string) {
         const html = `
 <!DOCTYPE html>
