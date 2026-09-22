@@ -276,7 +276,7 @@ export async function updateRoundDecision(req: Request, res: Response) {
             user.id
         );
 
-        if (decision === "next_round" && updated) {
+        if (updated) {
             try {
                 const interview = await prisma.interview.findUnique({
                     where: { id: id as string },
@@ -288,26 +288,52 @@ export async function updateRoundDecision(req: Request, res: Response) {
                 });
 
                 if (interview) {
-                    const nextRoundNumber = updated.roundNumber + 1;
-                    const schedulingUrl = await calendlyService.getSchedulingUrl();
+                    const candidateName = `${interview.candidate.firstname} ${interview.candidate.lastname}`.trim();
+                    const positionName = interview.position.title;
 
-                    await emailService.sendScheduleToCandidate({
-                        candidateEmail: interview.candidate.email,
-                        candidateName: `${interview.candidate.firstname} ${interview.candidate.lastname}`,
-                        positionName: interview.position.title,
-                        roundNumber: nextRoundNumber,
-                        schedulingUrl,
-                    });
+                    if (decision === "next_round") {
+                        const nextRoundNumber = updated.roundNumber + 1;
+                        const schedulingUrl = await calendlyService.getSchedulingUrl();
 
-                    await prisma.interview.update({
-                        where: { id: id as string },
-                        data: { calendlySchedulingUrl: schedulingUrl }
-                    });
+                        await emailService.sendScheduleToCandidate({
+                            candidateEmail: interview.candidate.email,
+                            candidateName,
+                            positionName,
+                            roundNumber: nextRoundNumber,
+                            schedulingUrl,
+                        });
 
-                    console.log(`[Email] Sent scheduling email to candidate for round ${nextRoundNumber} of interview ${id}`);
+                        await prisma.interview.update({
+                            where: { id: id as string },
+                            data: { calendlySchedulingUrl: schedulingUrl }
+                        });
+
+                        console.log(`[Email] Sent scheduling email to candidate for round ${nextRoundNumber} of interview ${id}`);
+                    } else if (decision === "hired") {
+                        await emailService.sendCandidateHired({
+                            candidateEmail: interview.candidate.email,
+                            candidateName,
+                            positionName,
+                        });
+                        console.log(`[Email] Sent selection/hired email to candidate for interview ${id}`);
+                    } else if (decision === "rejected") {
+                        await emailService.sendCandidateRejected({
+                            candidateEmail: interview.candidate.email,
+                            candidateName,
+                            positionName,
+                        });
+                        console.log(`[Email] Sent rejection email to candidate for interview ${id}`);
+                    } else if (decision === "hold") {
+                        await emailService.sendCandidateOnHold({
+                            candidateEmail: interview.candidate.email,
+                            candidateName,
+                            positionName,
+                        });
+                        console.log(`[Email] Sent on-hold email to candidate for interview ${id}`);
+                    }
                 }
             } catch (emailError: any) {
-                console.error("[Email] FAILED to send scheduling email for next round:", emailError.message);
+                console.error("[Email] FAILED to send decision email for round:", emailError.message || emailError);
             }
         }
 
