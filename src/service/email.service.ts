@@ -153,6 +153,102 @@ export const emailService = {
         );
     },
 
+    async sendCandidateHired(params: {
+        candidateEmail: string;
+        candidateName: string;
+        positionName: string;
+    }) {
+        const template = loadTemplate("decision-hired-candidate.html");
+        const html = replaceTemplateVars(template, {
+            candidateName: params.candidateName,
+            positionName: params.positionName,
+        });
+
+        return sendEmail(
+            params.candidateEmail,
+            `Congratulations! Selection Notification - ${params.positionName}`,
+            html
+        );
+    },
+
+    async sendCandidateRejected(params: {
+        candidateEmail: string;
+        candidateName: string;
+        positionName: string;
+    }) {
+        const template = loadTemplate("decision-rejected-candidate.html");
+        const html = replaceTemplateVars(template, {
+            candidateName: params.candidateName,
+            positionName: params.positionName,
+        });
+
+        return sendEmail(
+            params.candidateEmail,
+            `Update regarding your application for ${params.positionName}`,
+            html
+        );
+    },
+
+    async sendCandidateOnHold(params: {
+        candidateEmail: string;
+        candidateName: string;
+        positionName: string;
+    }) {
+        const template = loadTemplate("decision-hold-candidate.html");
+        const html = replaceTemplateVars(template, {
+            candidateName: params.candidateName,
+            positionName: params.positionName,
+        });
+
+        return sendEmail(
+            params.candidateEmail,
+            `Application Status Update - ${params.positionName}`,
+            html
+        );
+    },
+
+    async sendCandidateInterviewResumed(params: {
+        candidateEmail: string;
+        candidateName: string;
+        positionName: string;
+        roundNumber: number;
+        schedulingUrl?: string | null;
+    }) {
+        const template = loadTemplate("decision-resumed-candidate.html");
+        const schedulingSection = params.schedulingUrl
+            ? `<p style="color:#4b5563;line-height:1.6;margin:0 0 15px;font-size:14px;">
+                We invite you to select a convenient date and time slot for <strong>Round ${params.roundNumber}</strong>:
+               </p>
+               <table width="100%" cellpadding="0" cellspacing="0" style="margin:25px 0;">
+                <tr>
+                    <td align="center">
+                        <a href="${params.schedulingUrl}" target="_blank" style="display:inline-block;background-color:#4f46e5;color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:6px;font-size:15px;font-weight:600;">
+                            Select Interview Time Slot
+                        </a>
+                    </td>
+                </tr>
+               </table>
+               <p style="color:#6b7280;line-height:1.6;margin:0 0 10px;font-size:13px;">
+                Please complete scheduling within <strong>48 hours</strong> to secure your slot.
+               </p>`
+            : `<p style="color:#4b5563;line-height:1.6;margin:0 0 15px;font-size:14px;">
+                Our hiring team will be in touch with you shortly with further details and schedule for <strong>Round ${params.roundNumber}</strong>.
+               </p>`;
+
+        const html = replaceTemplateVars(template, {
+            candidateName: params.candidateName,
+            positionName: params.positionName,
+            roundNumber: String(params.roundNumber),
+            schedulingSection,
+        });
+
+        return sendEmail(
+            params.candidateEmail,
+            `Interview Process Resumed - ${params.positionName} (Round ${params.roundNumber})`,
+            html
+        );
+    },
+
     async sendConfirmationToInterviewer(params: {
         interviewerEmail: string;
         interviewerName: string;

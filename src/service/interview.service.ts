@@ -547,6 +547,41 @@ export async function getAllInterviews() {
     return interviews;
 }
 
+async function sendCandidateDecisionEmail(
+    candidate: { email: string; firstname: string; lastname: string },
+    position: { title: string },
+    decision: string
+) {
+    try {
+        const candidateName = `${candidate.firstname} ${candidate.lastname}`.trim();
+        const positionName = position.title;
+        if (decision === "hired") {
+            await emailService.sendCandidateHired({
+                candidateEmail: candidate.email,
+                candidateName,
+                positionName,
+            });
+            console.log(`[Email] Sent hired / selection email to candidate ${candidate.email} for position ${positionName}`);
+        } else if (decision === "rejected") {
+            await emailService.sendCandidateRejected({
+                candidateEmail: candidate.email,
+                candidateName,
+                positionName,
+            });
+            console.log(`[Email] Sent rejection email to candidate ${candidate.email} for position ${positionName}`);
+        } else if (decision === "hold") {
+            await emailService.sendCandidateOnHold({
+                candidateEmail: candidate.email,
+                candidateName,
+                positionName,
+            });
+            console.log(`[Email] Sent on-hold email to candidate ${candidate.email} for position ${positionName}`);
+        }
+    } catch (emailError: any) {
+        console.error(`[Email] FAILED to send decision (${decision}) email to candidate:`, emailError.message || emailError);
+    }
+}
+
 export async function updateInterviewDecision(interviewId: string, decision: string, adminId: string) {
     if (!isValidObjectId(interviewId)) {
         throw { status: 400, message: "Invalid interview id" };
@@ -658,6 +693,8 @@ export async function updateInterviewDecision(interviewId: string, decision: str
                     }
                 }
             }
+        } else if (["hired", "rejected", "hold"].includes(decision)) {
+            await sendCandidateDecisionEmail(interview.candidate, interview.position, decision);
         }
 
         return prisma.interview.findUnique({
@@ -729,7 +766,7 @@ export async function updateInterviewDecision(interviewId: string, decision: str
         });
     }
 
-    return prisma.interview.update({
+    const updatedInterview = await prisma.interview.update({
         where: { id: interviewId },
         data: {
             decision,
@@ -801,6 +838,12 @@ export async function updateInterviewDecision(interviewId: string, decision: str
             }
         }
     });
+
+    if (["hired", "rejected", "hold"].includes(decision)) {
+        await sendCandidateDecisionEmail(interview.candidate, interview.position, decision);
+    }
+
+    return updatedInterview;
 }
 
 export async function getInterviewerInterviews(interviewerId: string) {

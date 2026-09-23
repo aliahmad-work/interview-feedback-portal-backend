@@ -529,8 +529,83 @@ export async function resumeInterview(interviewId: string, adminId: string) {
         throw { status: 400, message: "Interview is not on hold" };
     }
 
-    if (!interview.rounds || interview.rounds.length === 0) {
-        throw { status: 400, message: "Interview has no rounds" };
+    const hasRounds = interview.rounds && interview.rounds.length > 0;
+    const candidateName = `${interview.candidate.firstname} ${interview.candidate.lastname}`.trim();
+    const positionName = interview.position.title;
+
+    if (!hasRounds) {
+        const schedulingUrl = await calendlyService.getSchedulingUrl();
+        await prisma.interview.update({
+            where: { id: interviewId },
+            data: {
+                decision: "next_round",
+                status: "pending_schedule",
+                calendlySchedulingUrl: schedulingUrl,
+                decisionUpdatedAt: new Date(),
+                decisionUpdatedBy: adminId
+            }
+        });
+
+        try {
+            await emailService.sendCandidateInterviewResumed({
+                candidateEmail: interview.candidate.email,
+                candidateName,
+                positionName,
+                roundNumber: (interview.round || 1) + 1,
+                schedulingUrl,
+            });
+            console.log(`[Email] Sent interview resumed email to candidate ${interview.candidate.email} for interview ${interviewId}`);
+        } catch (emailError: any) {
+            console.error("[Email] FAILED to send interview resumed email:", emailError.message || emailError);
+        }
+
+        return prisma.interview.findUnique({
+            where: { id: interviewId },
+            include: {
+                candidate: {
+                    select: {
+                        id: true,
+                        candidateCode: true,
+                        firstname: true,
+                        lastname: true,
+                        email: true,
+                        phone: true,
+                        experience: true,
+                        currentCompany: true,
+                        currentPosition: true,
+                        skills: true
+                    }
+                },
+                position: {
+                    select: {
+                        id: true,
+                        title: true,
+                        requiredSkills: true,
+                        minimumExperience: true,
+                        maximumExperience: true,
+                        description: true,
+                        status: true
+                    }
+                },
+                creator: {
+                    select: {
+                        id: true,
+                        firstname: true,
+                        lastname: true,
+                        email: true
+                    }
+                },
+                interviewers: {
+                    select: {
+                        id: true,
+                        firstname: true,
+                        lastname: true,
+                        email: true,
+                        designation: true
+                    }
+                }
+            }
+        });
     }
 
     const heldRound = interview.rounds.find(r => r.decision === "hold");
@@ -538,20 +613,37 @@ export async function resumeInterview(interviewId: string, adminId: string) {
         throw { status: 400, message: "No held round found" };
     }
 
-    const nextRound = interview.rounds.find(r => r.roundNumber === heldRound.roundNumber + 1);
+    let nextRound = interview.rounds.find(r => r.roundNumber === heldRound.roundNumber + 1);
 
-    let nextStatus = "pending";
+    let nextStatus = "pending_schedule";
     let schedulingUrl: string | null = null;
-    let shouldSendEmail = false;
+    let targetRoundNumber = heldRound.roundNumber + 1;
 
     if (nextRound) {
+        targetRoundNumber = nextRound.roundNumber;
         if (nextRound.date && nextRound.startTime && nextRound.endTime) {
             nextStatus = "scheduled";
         } else {
             nextStatus = "pending_schedule";
             schedulingUrl = await calendlyService.getSchedulingUrl();
-            shouldSendEmail = true;
         }
+    } else {
+        // Create the next round if it doesn't already exist
+        schedulingUrl = await calendlyService.getSchedulingUrl();
+        nextRound = await prisma.interviewRound.create({
+            data: {
+                interviewId,
+                roundNumber: targetRoundNumber,
+                type: heldRound.type,
+                duration: heldRound.duration,
+                date: null,
+                startTime: null,
+                endTime: null,
+                status: "pending_schedule",
+                decision: "pending",
+                interviewerIds: heldRound.interviewerIds,
+            }
+        });
     }
 
     await prisma.$transaction(async (tx) => {
@@ -583,19 +675,17 @@ export async function resumeInterview(interviewId: string, adminId: string) {
         });
     });
 
-    if (shouldSendEmail && schedulingUrl && nextRound) {
-        try {
-            await emailService.sendScheduleToCandidate({
-                candidateEmail: interview.candidate.email,
-                candidateName: `${interview.candidate.firstname} ${interview.candidate.lastname}`,
-                positionName: interview.position.title,
-                roundNumber: nextRound.roundNumber,
-                schedulingUrl,
-            });
-            console.log(`[Email] Sent scheduling email to candidate for round ${nextRound.roundNumber} on resume of interview ${interviewId}`);
-        } catch (emailError: any) {
-            console.error("[Email] FAILED to send scheduling email on resume:", emailError.message || emailError);
-        }
+    try {
+        await emailService.sendCandidateInterviewResumed({
+            candidateEmail: interview.candidate.email,
+            candidateName,
+            positionName,
+            roundNumber: targetRoundNumber,
+            schedulingUrl: schedulingUrl || null,
+        });
+        console.log(`[Email] Sent interview resumed email to candidate ${interview.candidate.email} for round ${targetRoundNumber} on resume of interview ${interviewId}`);
+    } catch (emailError: any) {
+        console.error("[Email] FAILED to send interview resumed email:", emailError.message || emailError);
     }
 
     return prisma.interview.findUnique({
