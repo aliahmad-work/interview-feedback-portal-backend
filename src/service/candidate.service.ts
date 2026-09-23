@@ -243,6 +243,12 @@ export async function getCandidateById(id: string) {
                     }
                 },
                 orderBy: { createdAt: 'desc' }
+            },
+            candidateQuestionnaires: {
+                include: {
+                    template: true
+                },
+                orderBy: { createdAt: 'desc' }
             }
         }
     });

@@ -22,6 +22,7 @@ import { calendlyController } from "../controllers/calendly.controller";
 import { getCandidates, getCandidateById, createCandidate, updateCandidate, deleteCandidate, downloadResume, bulkUploadAndMatchResumes } from "../controllers/candidate.controller";
 import { getInterviewers, getPositions, getPositionById, getDepartments, createUser, createPosition, updatePosition } from "../controllers/admin.controller";
 import { VALID_DECISIONS } from "../service/interview.service";
+import { createTemplate, getTemplates, updateTemplate, deleteTemplate } from "../controllers/questionnaire.controller";
 
 
 const router = Router();
@@ -315,6 +316,45 @@ router.post(
     ],
     validate,
     calendlyController.testEmail
+);
+
+// Questionnaire Template Routes
+router.post(
+    "/questionnaires/templates",
+    authenticate,
+    authorize("admin"),
+    [
+        body("name").notEmpty().withMessage("Name is required"),
+        body("questions").isArray({ min: 1 }).withMessage("At least one question is required")
+    ],
+    validate,
+    createTemplate
+);
+
+router.get(
+    "/questionnaires/templates",
+    authenticate,
+    authorize("admin"),
+    getTemplates
+);
+
+router.put(
+    "/questionnaires/templates/:id",
+    authenticate,
+    authorize("admin"),
+    [
+        body("name").optional().notEmpty().withMessage("Name cannot be empty"),
+        body("questions").optional().isArray({ min: 1 }).withMessage("At least one question is required")
+    ],
+    validate,
+    updateTemplate
+);
+
+router.delete(
+    "/questionnaires/templates/:id",
+    authenticate,
+    authorize("admin"),
+    deleteTemplate
 );
 
 export default router;

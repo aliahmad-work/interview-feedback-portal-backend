@@ -45,6 +45,7 @@ model User {
   roundIds            String[]               @db.ObjectId
   rounds              InterviewRound[]       @relation("RoundInterviewers", fields: [roundIds], references: [id])
   interviewFeedbacks  InterviewFeedback[]
+  questionnaireTemplates QuestionnaireTemplate[]
 
   @@index([roleId])
 }
@@ -61,7 +62,7 @@ model Candidate {
   currentPosition    String?
   skills             String[]
   notes              String?
-  status             String              @default("shortlisted") // "shortlisted" | "neglected" | "manual"
+  status             String              @default("shortlisted") // "shortlisted" | "neglected" | "manual" | "not_interested"
   aiMatchScore       Int?
   aiTier             String?             // "TIER_1_TOP" | "TIER_2_STRONG" | "TIER_3_GOOD" | "NEGLECTED"
   aiSummary          String?
@@ -77,6 +78,7 @@ model Candidate {
   updatedAt          DateTime            @updatedAt
   interviews         Interview[]
   interviewFeedbacks InterviewFeedback[]
+  candidateQuestionnaires CandidateQuestionnaire[]
 
   @@index([createdBy])
   @@index([status])
@@ -134,6 +136,7 @@ model Interview {
   lastSyncedAt         DateTime?
   rounds               InterviewRound[]
   interviewFeedbacks   InterviewFeedback[]
+  candidateQuestionnaires CandidateQuestionnaire[]
 
   @@index([candidateId])
   @@index([positionId])
@@ -189,4 +192,38 @@ model InterviewFeedback {
   @@index([roundId])
   @@index([candidateId])
   @@index([interviewerId])
+}
+
+model QuestionnaireTemplate {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  questions   String[]
+  createdBy   String   @db.ObjectId
+  creator     User     @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  candidateQuestionnaires CandidateQuestionnaire[]
+
+  @@index([createdBy])
+}
+
+model CandidateQuestionnaire {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  candidateId  String    @db.ObjectId
+  candidate    Candidate @relation(fields: [candidateId], references: [id])
+  interviewId  String?   @db.ObjectId
+  interview    Interview? @relation(fields: [interviewId], references: [id])
+  templateId   String    @db.ObjectId
+  template     QuestionnaireTemplate @relation(fields: [templateId], references: [id])
+  token        String    @unique
+  status       String    @default("pending") // "pending" | "completed" | "not_interested"
+  answers      Json?
+  calendlyLink String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([candidateId])
+  @@index([interviewId])
+  @@index([templateId])
 }

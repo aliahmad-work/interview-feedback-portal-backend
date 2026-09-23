@@ -2,6 +2,7 @@ import prisma from "../lib/prisma";
 import { CreateRoundData, createInterviewRounds, getCurrentRound, updateRoundDecision, resumeInterview, VALID_DECISIONS, isRoundVisibleToInterviewers } from "./interview-round.service";
 import { calendlyService } from "./calendly.service";
 import { emailService } from "./email.service";
+import crypto from "crypto";
 
 export { VALID_DECISIONS };
 
@@ -53,6 +54,7 @@ export async function createInterview(data: {
     rounds?: CreateRoundData[];
     schedulingMode?: boolean;
     duration?: number;
+    questionnaireTemplateId?: string;
 }) {
     if (!isValidObjectId(data.candidateId)) {
         throw { status: 400, message: "Invalid candidate id" };
@@ -168,18 +170,53 @@ export async function createInterview(data: {
             return results;
         });
 
-        // Send scheduling email to candidate
-        try {
-            await emailService.sendScheduleToCandidate({
-                candidateEmail: candidate.email,
-                candidateName: `${candidate.firstname} ${candidate.lastname}`,
-                positionName: position.title,
-                roundNumber: 1,
-                schedulingUrl,
+        console.log(`[Interview] Scheduling mode interview creation - candidate: ${candidate.email}, questionnaireTemplateId: ${data.questionnaireTemplateId}, existingInterviewsCount: ${existingCount}`);
+
+        // Handle Questionnaire if template is provided and this is round 1
+        if (data.questionnaireTemplateId && existingCount === 0) {
+            const token = crypto.randomBytes(32).toString("hex");
+            const frontendUrl = process.env.FRONTEND_URL || "http://localhost:4200";
+            const questionnaireUrl = `${frontendUrl}/candidate/questionnaire/${token}`;
+            
+            console.log(`[Interview] Generating CandidateQuestionnaire with token: ${token}, url: ${questionnaireUrl}`);
+
+            await prisma.candidateQuestionnaire.create({
+                data: {
+                    candidateId: data.candidateId,
+                    interviewId: interview.id,
+                    templateId: data.questionnaireTemplateId,
+                    token,
+                    calendlyLink: schedulingUrl
+                }
             });
-        } catch (emailError: any) {
-            console.error("[Email] FAILED to send scheduling email to candidate:", candidate.email);
-            console.error("[Email] Error:", emailError.message || emailError);
+
+            try {
+                console.log(`[Interview] Sending Questionnaire email to ${candidate.email}`);
+                await emailService.sendQuestionnaireToCandidate({
+                    candidateEmail: candidate.email,
+                    candidateName: `${candidate.firstname} ${candidate.lastname}`,
+                    positionName: position.title,
+                    questionnaireUrl,
+                });
+            } catch (emailError: any) {
+                console.error("[Email] FAILED to send questionnaire email to candidate:", candidate.email);
+                console.error("[Email] Error:", emailError.message || emailError);
+            }
+        } else {
+            console.log(`[Interview] Sending Standard Schedule email to ${candidate.email} (questionnaire skipped - template: ${data.questionnaireTemplateId}, existingCount: ${existingCount})`);
+            // Send standard scheduling email to candidate
+            try {
+                await emailService.sendScheduleToCandidate({
+                    candidateEmail: candidate.email,
+                    candidateName: `${candidate.firstname} ${candidate.lastname}`,
+                    positionName: position.title,
+                    roundNumber: 1,
+                    schedulingUrl,
+                });
+            } catch (emailError: any) {
+                console.error("[Email] FAILED to send scheduling email to candidate:", candidate.email);
+                console.error("[Email] Error:", emailError.message || emailError);
+            }
         }
 
         return {
