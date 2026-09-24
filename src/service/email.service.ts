@@ -153,6 +153,62 @@ export const emailService = {
         );
     },
 
+    async sendQuestionnaireToCandidate(params: {
+        candidateEmail: string;
+        candidateName: string;
+        positionName: string;
+        questionnaireUrl: string;
+    }) {
+        const template = loadTemplate("questionnaire-candidate.html");
+        const html = replaceTemplateVars(template, {
+            candidateName: params.candidateName,
+            positionName: params.positionName,
+            questionnaireUrl: params.questionnaireUrl,
+        });
+
+        return sendEmail(
+            params.candidateEmail,
+            `Action Required: Pre-Interview Questionnaire - ${params.positionName}`,
+            html
+        );
+    },
+
+    async sendQuestionnaireSubmittedToAdmin(params: {
+        adminEmail: string;
+        candidateName: string;
+        candidateEmail: string;
+        positionName: string;
+        answers: Record<string, string>;
+    }) {
+        const template = loadTemplate("questionnaire-submitted-admin.html");
+        
+        let answersHtml = "";
+        for (const [question, answer] of Object.entries(params.answers || {})) {
+            answersHtml += `
+            <div style="margin-bottom: 16px; background-color: #f8fafc; border-left: 3px solid #6366f1; padding: 12px 16px; border-radius: 4px;">
+                <p style="margin: 0 0 6px 0; font-weight: 600; color: #1e293b; font-size: 14px;">${question}</p>
+                <p style="margin: 0; color: #475569; font-size: 14px; white-space: pre-wrap;">${answer || "<em>No answer provided</em>"}</p>
+            </div>`;
+        }
+
+        if (!answersHtml) {
+            answersHtml = `<p style="color: #64748b; font-style: italic;">No specific answers provided.</p>`;
+        }
+
+        const html = replaceTemplateVars(template, {
+            candidateName: params.candidateName,
+            candidateEmail: params.candidateEmail,
+            positionName: params.positionName,
+            answersHtml
+        });
+
+        return sendEmail(
+            params.adminEmail,
+            `Questionnaire Completed: ${params.candidateName} - ${params.positionName}`,
+            html
+        );
+    },
+
     async sendCandidateHired(params: {
         candidateEmail: string;
         candidateName: string;

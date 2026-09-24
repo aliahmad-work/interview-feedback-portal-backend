@@ -9,12 +9,13 @@ import * as candidateServices from "../service/candidate.service";
 export async function createInterview(req: Request, res: Response) {
     try {
         const user = (req as any).user;
-        const { candidateId, positionId, interviewerIds, date, startTime, endTime, round, type, status, rounds, schedulingMode, duration } = req.body;
+        const { candidateId, positionId, interviewerIds, date, startTime, endTime, round, type, status, rounds, schedulingMode, duration, questionnaireTemplateId } = req.body;
 
         const interviewData: any = {
             candidateId,
             positionId,
-            createdBy: user.id
+            createdBy: user.id,
+            questionnaireTemplateId
         };
 
         if (schedulingMode) {
