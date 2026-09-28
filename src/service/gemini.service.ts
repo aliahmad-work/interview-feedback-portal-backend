@@ -29,11 +29,32 @@ export interface ParsedResumeEvaluation {
 }
 
 export interface JobPositionContext {
+    id?: string;
     title: string;
     description: string;
     requiredSkills: string[];
     minimumExperience: number;
     maximumExperience?: number | null;
+    department?: string;
+}
+
+export interface MultiPositionMatchResult {
+    candidateInfo: CandidateParsedInfo;
+    bestMatch: {
+        positionId: string;
+        positionTitle: string;
+        evaluation: CandidateEvaluation;
+    } | null;
+    allMatches: Array<{
+        positionId: string;
+        positionTitle: string;
+        matchScore: number;
+        tier: "TIER_1_TOP" | "TIER_2_STRONG" | "TIER_3_GOOD" | "NEGLECTED";
+        shortlisted: boolean;
+        summary: string;
+        strengths: string[];
+        gaps: string[];
+    }>;
 }
 
 function getGeminiClient(): GoogleGenAI {
@@ -91,7 +112,7 @@ export function determineTier(matchScore: number): "TIER_1_TOP" | "TIER_2_STRONG
 }
 
 /**
- * Uses Gemini API to evaluate resume content against a Job Position strictly and factually.
+ * Uses Gemini API to evaluate resume content against a single Job Position strictly and factually.
  */
 export async function evaluateResumeWithGemini(
     fileBuffer: Buffer,
@@ -271,3 +292,222 @@ Analyze the resume text above strictly and extract all fields according to the s
     };
 }
 
+/**
+ * Uses Gemini API to evaluate resume content across ALL open job positions simultaneously,
+ * determining the best-fit position and returning scores for all positions.
+ */
+export async function evaluateResumeAcrossAllPositions(
+    fileBuffer: Buffer,
+    mimetype: string,
+    filename: string,
+    positions: JobPositionContext[]
+): Promise<MultiPositionMatchResult> {
+    const ai = getGeminiClient();
+
+    const extractedText = await extractTextFromBuffer(fileBuffer, mimetype);
+
+    if (!extractedText || extractedText.trim().length === 0) {
+        throw new Error(`Could not extract any readable text from "${filename}". File might be empty, corrupted, or scanned image without OCR.`);
+    }
+
+    if (!positions || positions.length === 0) {
+        throw new Error("No open job positions available for matching.");
+    }
+
+    const systemInstruction = `You are a strict, objective, and rigorous talent matching AI engine.
+Your task is to analyze candidate resumes and evaluate their fit across MULTIPLE open job positions in the company.
+
+CRITICAL RULES:
+1. NO HALLUCINATIONS OR GUESSWORK:
+   - Extract ONLY information explicitly present in the provided resume text.
+   - Do NOT invent companies, skills, contact numbers, email addresses, or years of experience.
+   - If contact details are missing, return "N/A" or empty strings.
+
+2. EXPERIENCE CALCULATION:
+   - Carefully compute total actual work experience based strictly on employment dates in the resume.
+   - Total Experience String: State exact duration (e.g. "3 years", "5 years 2 months").
+
+3. MULTI-POSITION EVALUATION & BEST FIT SELECTION:
+   - Evaluate the candidate against EACH provided job position independently with a 0-100 score.
+   - Strict scoring scale:
+     * Tier 1 (95 - 100): Near-perfect candidate for this role.
+     * Tier 2 (85 - 94): Strong candidate.
+     * Tier 3 (75 - 84): Acceptable candidate.
+     * Neglected (< 75): Not a good fit, missing core requirements or experience.
+   - Identify the single "bestMatchPositionId" (the position with the highest score, or the one that represents the optimal career/skills alignment).
+   - If the candidate scores < 75 for all positions, bestMatchPositionId should still be the highest scoring position among them, but reflect their actual match score accurately.`;
+
+    const positionsFormatted = positions.map((p, index) => `
+[Position ${index + 1}]
+- Position ID: ${p.id || `pos_${index + 1}`}
+- Title: ${p.title}
+- Department: ${p.department || "General"}
+- Required Skills: ${p.requiredSkills.join(", ")}
+- Minimum Experience: ${p.minimumExperience} years
+- Maximum Experience: ${p.maximumExperience ? `${p.maximumExperience} years` : "Not specified"}
+- Description: ${p.description}
+`).join("\n");
+
+    const userPrompt = `### AVAILABLE OPEN JOB POSITIONS:
+${positionsFormatted}
+
+---
+### CANDIDATE RESUME (${filename}):
+"""
+${extractedText}
+"""
+
+---
+Analyze the candidate's resume, extract their profile data, score them against each open position, and designate the best-fit position.`;
+
+    const requestedModel = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+    const modelsToTry = Array.from(new Set([
+        requestedModel,
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.6-flash",
+        "gemini-3.7-flash",
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest"
+    ]));
+
+    let response: any = null;
+    let lastError: any = null;
+
+    for (const model of modelsToTry) {
+        try {
+            response = await ai.models.generateContent({
+                model,
+                contents: userPrompt,
+                config: {
+                    systemInstruction,
+                    temperature: 0.1,
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            candidateInfo: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    firstname: { type: Type.STRING },
+                                    lastname: { type: Type.STRING },
+                                    email: { type: Type.STRING },
+                                    phone: { type: Type.STRING },
+                                    experience: { type: Type.STRING, description: "Calculated actual work experience strictly from resume dates" },
+                                    currentCompany: { type: Type.STRING },
+                                    currentPosition: { type: Type.STRING },
+                                    skills: {
+                                        type: Type.ARRAY,
+                                        items: { type: Type.STRING },
+                                        description: "Technical and professional skills explicitly present in the resume"
+                                    },
+                                    notes: { type: Type.STRING, description: "Brief objective notes on candidate background" }
+                                },
+                                required: ["firstname", "lastname", "email", "phone", "skills"]
+                            },
+                            bestMatchPositionId: {
+                                type: Type.STRING,
+                                description: "The Position ID of the job where the candidate is best suited"
+                            },
+                            positionEvaluations: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        positionId: { type: Type.STRING },
+                                        matchScore: { type: Type.INTEGER, description: "Strict 0-100 score" },
+                                        summary: { type: Type.STRING, description: "Honest 2-3 sentence summary of candidate suitability for this position" },
+                                        strengths: {
+                                            type: Type.ARRAY,
+                                            items: { type: Type.STRING }
+                                        },
+                                        gaps: {
+                                            type: Type.ARRAY,
+                                            items: { type: Type.STRING }
+                                        }
+                                    },
+                                    required: ["positionId", "matchScore", "summary", "strengths", "gaps"]
+                                }
+                            }
+                        },
+                        required: ["candidateInfo", "bestMatchPositionId", "positionEvaluations"]
+                    }
+                }
+            });
+
+            if (response && response.text) {
+                break;
+            }
+        } catch (err: any) {
+            lastError = err;
+            console.warn(`Gemini multi-position matching failed with model '${model}', trying next model...`, err.message || err);
+        }
+    }
+
+    if (!response || !response.text) {
+        throw new Error(lastError?.message || "Failed to generate multi-position evaluation from Gemini API.");
+    }
+
+    const parsed = JSON.parse(response.text) as {
+        candidateInfo: CandidateParsedInfo;
+        bestMatchPositionId: string;
+        positionEvaluations: Array<{
+            positionId: string;
+            matchScore: number;
+            summary: string;
+            strengths: string[];
+            gaps: string[];
+        }>;
+    };
+
+    const positionMap = new Map(positions.map(p => [p.id || "", p]));
+
+    const allMatches = (parsed.positionEvaluations || []).map(evalItem => {
+        const pos = positionMap.get(evalItem.positionId);
+        const score = Math.max(0, Math.min(100, Math.round(evalItem.matchScore || 0)));
+        const tier = determineTier(score);
+        return {
+            positionId: evalItem.positionId,
+            positionTitle: pos?.title || "Unknown Position",
+            matchScore: score,
+            tier,
+            shortlisted: score >= 75,
+            summary: evalItem.summary || "",
+            strengths: Array.isArray(evalItem.strengths) ? evalItem.strengths : [],
+            gaps: Array.isArray(evalItem.gaps) ? evalItem.gaps : []
+        };
+    });
+
+    // Sort allMatches by matchScore descending
+    allMatches.sort((a, b) => b.matchScore - a.matchScore);
+
+    // Determine the best match
+    let bestMatchItem = allMatches.find(m => m.positionId === parsed.bestMatchPositionId) || allMatches[0] || null;
+
+    return {
+        candidateInfo: {
+            firstname: parsed.candidateInfo.firstname || "Unknown",
+            lastname: parsed.candidateInfo.lastname || "Candidate",
+            email: parsed.candidateInfo.email || "",
+            phone: parsed.candidateInfo.phone || "",
+            experience: parsed.candidateInfo.experience || undefined,
+            currentCompany: parsed.candidateInfo.currentCompany || undefined,
+            currentPosition: parsed.candidateInfo.currentPosition || undefined,
+            skills: Array.isArray(parsed.candidateInfo.skills) ? parsed.candidateInfo.skills : [],
+            notes: parsed.candidateInfo.notes || undefined
+        },
+        bestMatch: bestMatchItem ? {
+            positionId: bestMatchItem.positionId,
+            positionTitle: bestMatchItem.positionTitle,
+            evaluation: {
+                matchScore: bestMatchItem.matchScore,
+                summary: bestMatchItem.summary,
+                strengths: bestMatchItem.strengths,
+                gaps: bestMatchItem.gaps,
+                tier: bestMatchItem.tier,
+                shortlisted: bestMatchItem.shortlisted
+            }
+        } : null,
+        allMatches
+    };
+}

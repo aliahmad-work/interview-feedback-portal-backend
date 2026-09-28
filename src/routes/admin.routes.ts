@@ -64,7 +64,7 @@ router.post(
     authorize("admin"),
     uploadMultipleResumes,
     [
-        body("positionId").notEmpty().withMessage("Position ID is required")
+        body("positionId").optional({ nullable: true, checkFalsy: true })
     ],
     validate,
     bulkUploadAndMatchResumes
