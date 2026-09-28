@@ -130,10 +130,6 @@ export async function bulkUploadAndMatchResumes(req: Request, res: Response) {
         const { positionId } = req.body;
         const files = req.files as Express.Multer.File[] | undefined;
 
-        if (!positionId) {
-            return res.status(400).json({ message: "positionId is required" });
-        }
-
         if (!files || files.length === 0) {
             return res.status(400).json({ message: "Please upload at least one resume file" });
         }
@@ -145,7 +141,7 @@ export async function bulkUploadAndMatchResumes(req: Request, res: Response) {
         const { processBatchResumes } = await import("../service/resumeMatcher.service");
 
         const result = await processBatchResumes({
-            positionId,
+            positionId: positionId || undefined,
             files,
             createdBy: user.id
         });
