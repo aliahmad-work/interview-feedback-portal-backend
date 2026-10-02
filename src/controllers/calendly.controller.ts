@@ -199,24 +199,42 @@ export const calendlyController = {
                     const candidateEmail = interview.candidate.email;
                     console.log(`[Calendly Sync] Checking interview ${interview.id} for candidate: ${candidateEmail}`);
 
-                    // Use the invitee_email API filter — this queries Calendly for events
-                    // where the candidate is the actual booker (invitee), not a guest
+                    // Collect all Calendly event URIs already assigned to any round of this interview
+                    // (so Round 2 doesn't inadvertently match Round 1's Calendly event URI).
+                    const assignedEventUris = new Set(
+                        interview.rounds
+                            .map((r: any) => r.calendlyEventUri)
+                            .filter(Boolean)
+                    );
+
                     const now = new Date();
                     const thirtyDaysAhead = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-                    // A pending interview is awaiting a NEW booking, so only match FUTURE
-                    // events. Matching past events caused interviews to be synced to
-                    // stale/past dates with expired reschedule URLs ("event is in the past").
+                    // A pending interview is awaiting a NEW booking, so query active FUTURE events
+                    // directly filtered by candidate email.
                     const matchingEvents = await calendlyService.getAllScheduledEvents({
                         status: "active",
+                        inviteeEmail: candidateEmail.toLowerCase(),
                         minStartTime: now.toISOString(),
                         maxStartTime: thirtyDaysAhead.toISOString(),
                     });
 
-                    // Find events where the candidate is the invitee
+                    // Sort newest first by created_at / updated_at / start_time
+                    matchingEvents.sort(
+                        (a, b) =>
+                            new Date(b.created_at || b.updated_at || b.start_time).getTime() -
+                            new Date(a.created_at || a.updated_at || a.start_time).getTime()
+                    );
+
+                    // Find active event where candidate is invitee and that hasn't already been assigned to another round
                     let matchingEvent: CalendlyScheduledEvent | null = null;
                     let candidateRescheduleUrl: string | null = null;
                     for (const event of matchingEvents) {
+                        if (assignedEventUris.has(event.uri)) {
+                            console.log(`[Calendly Sync] Skipping already-assigned event ${event.uri} for interview ${interview.id}`);
+                            continue;
+                        }
+
                         const eventUuid = calendlyService.extractUuidFromUri(event.uri);
                         try {
                             const invitees = await calendlyService.getEventInviteesAll(eventUuid);
@@ -237,11 +255,11 @@ export const calendlyController = {
                     }
 
                     if (!matchingEvent) {
-                        console.log(`[Calendly Sync] No Calendly event found for candidate: ${candidateEmail} (interview: ${interview.id})`);
+                        console.log(`[Calendly Sync] No new Calendly event found for candidate: ${candidateEmail} (interview: ${interview.id})`);
                         continue;
                     }
 
-                    // 3. Find the pending round (first round without date/time)
+                    // 3. Find the pending round (first round in pending/pending_schedule or without date/time)
                     const pendingRound = interview.rounds.find(
                         (r: any) =>
                             r.status === "pending" ||
