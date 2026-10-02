@@ -172,8 +172,8 @@ export async function createInterview(data: {
 
         console.log(`[Interview] Scheduling mode interview creation - candidate: ${candidate.email}, questionnaireTemplateId: ${data.questionnaireTemplateId}, existingInterviewsCount: ${existingCount}`);
 
-        // Handle Questionnaire if template is provided and this is round 1
-        if (data.questionnaireTemplateId && existingCount === 0) {
+        // Handle Questionnaire if template is provided
+        if (data.questionnaireTemplateId) {
             const token = crypto.randomBytes(32).toString("hex");
             const frontendUrl = process.env.FRONTEND_URL || "http://localhost:4200";
             const questionnaireUrl = `${frontendUrl}/candidate/questionnaire/${token}`;
@@ -203,7 +203,7 @@ export async function createInterview(data: {
                 console.error("[Email] Error:", emailError.message || emailError);
             }
         } else {
-            console.log(`[Interview] Sending Standard Schedule email to ${candidate.email} (questionnaire skipped - template: ${data.questionnaireTemplateId}, existingCount: ${existingCount})`);
+            console.log(`[Interview] Sending Standard Schedule email to ${candidate.email} (questionnaire skipped - no template provided)`);
             // Send standard scheduling email to candidate
             try {
                 await emailService.sendScheduleToCandidate({

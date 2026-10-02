@@ -188,6 +188,7 @@ export const calendlyController = {
                         orderBy: { roundNumber: "asc" },
                         include: { interviewers: true },
                     },
+                    candidateQuestionnaires: true,
                 },
             });
 
@@ -199,10 +200,22 @@ export const calendlyController = {
                     const candidateEmail = interview.candidate.email;
                     console.log(`[Calendly Sync] Checking interview ${interview.id} for candidate: ${candidateEmail}`);
 
-                    // Collect all Calendly event URIs already assigned to any round of this interview
-                    // (so Round 2 doesn't inadvertently match Round 1's Calendly event URI).
+                    // Skip if there is a pending questionnaire for this interview that the candidate hasn't completed yet
+                    const pendingQuestionnaire = interview.candidateQuestionnaires?.find(
+                        (q: any) => q.status === "pending"
+                    );
+                    if (pendingQuestionnaire) {
+                        console.log(`[Calendly Sync] Skipping interview ${interview.id} for ${candidateEmail}: questionnaire is still pending`);
+                        continue;
+                    }
+
+                    // Collect all Calendly event URIs already assigned to any interview round across the database
+                    const globallyAssignedRounds = await prisma.interviewRound.findMany({
+                        where: { calendlyEventUri: { not: null } },
+                        select: { calendlyEventUri: true }
+                    });
                     const assignedEventUris = new Set(
-                        interview.rounds
+                        globallyAssignedRounds
                             .map((r: any) => r.calendlyEventUri)
                             .filter(Boolean)
                     );
@@ -229,9 +242,18 @@ export const calendlyController = {
                     // Find active event where candidate is invitee and that hasn't already been assigned to another round
                     let matchingEvent: CalendlyScheduledEvent | null = null;
                     let candidateRescheduleUrl: string | null = null;
+                    const interviewCreatedAt = new Date(interview.createdAt).getTime();
+
                     for (const event of matchingEvents) {
                         if (assignedEventUris.has(event.uri)) {
                             console.log(`[Calendly Sync] Skipping already-assigned event ${event.uri} for interview ${interview.id}`);
+                            continue;
+                        }
+
+                        // Ensure event was booked on Calendly after this interview record was created
+                        const eventCreatedAt = new Date(event.created_at || event.start_time).getTime();
+                        if (eventCreatedAt < interviewCreatedAt - 60000) { // allow 1 min buffer
+                            console.log(`[Calendly Sync] Skipping older event ${event.uri} created before interview request (${event.created_at} vs ${interview.createdAt})`);
                             continue;
                         }
 
