@@ -649,6 +649,26 @@ export const emailService = {
         return sendEmail(params.adminEmail, subject, html);
     },
 
+    async sendCandidateNotInterestedToAdmin(params: {
+        adminEmail: string;
+        candidateName: string;
+        candidateEmail: string;
+        positionName: string;
+    }) {
+        const template = loadTemplate("not-interested-admin.html");
+        const html = replaceTemplateVars(template, {
+            candidateName: params.candidateName,
+            candidateEmail: params.candidateEmail,
+            positionName: params.positionName,
+        });
+
+        return sendEmail(
+            params.adminEmail,
+            `Application Update: ${params.candidateName} is not interested - ${params.positionName}`,
+            html
+        );
+    },
+
     async sendTestEmail(to: string) {
         const html = `
 <!DOCTYPE html>
