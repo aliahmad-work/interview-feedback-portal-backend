@@ -172,7 +172,7 @@ export const submitQuestionnaire = async (req: Request, res: Response): Promise<
 
     if (isInterested === false) {
       // Candidate is not interested
-      await prisma.$transaction([
+      const transactionTasks: any[] = [
         prisma.candidateQuestionnaire.update({
           where: { id: questionnaire.id },
           data: { status: "not_interested" }
@@ -181,7 +181,40 @@ export const submitQuestionnaire = async (req: Request, res: Response): Promise<
           where: { id: questionnaire.candidateId },
           data: { status: "not_interested" }
         })
-      ]);
+      ];
+
+      // Cancel the interview and its rounds so they are removed from Upcoming Interviews
+      if (questionnaire.interviewId) {
+        transactionTasks.push(
+          prisma.interview.update({
+            where: { id: questionnaire.interviewId },
+            data: { 
+              status: "cancelled",
+              decision: "rejected"
+            }
+          }),
+          prisma.interviewRound.updateMany({
+            where: { interviewId: questionnaire.interviewId },
+            data: { status: "cancelled" }
+          })
+        );
+      }
+
+      await prisma.$transaction(transactionTasks);
+
+      // Notify admin creator via email
+      if (questionnaire.interview?.creator?.email) {
+        try {
+          await emailService.sendCandidateNotInterestedToAdmin({
+            adminEmail: questionnaire.interview.creator.email,
+            candidateName: `${questionnaire.candidate.firstname} ${questionnaire.candidate.lastname}`,
+            candidateEmail: questionnaire.candidate.email,
+            positionName: questionnaire.interview.position.title
+          });
+        } catch (emailErr) {
+          console.error("Failed to send not interested email to admin:", emailErr);
+        }
+      }
 
       res.json({ message: "Thank you for letting us know." });
       return;
